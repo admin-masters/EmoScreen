@@ -1,0 +1,13 @@
+Django>=5.0,<6.0
+mysqlclient>=2.2.0        # Preferred on macOS/Linux; may work on Windows too
+PyMySQL>=1.1.0            # Fallback if mysqlclient fails on Windows
+pandas>=2.2.0
+openpyxl>=3.1.0
+requests>=2.31.0
+python-dotenv>=1.0.1
+sendgrid==6.11.0
+Pillow>=10.0.0
+pypdf>=3.17.0
+reportlab>=3.6.12
+social-auth-app-django==5.4.0
+

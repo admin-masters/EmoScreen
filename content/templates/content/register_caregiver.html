@@ -1,0 +1,57 @@
+{% extends "content/base.html" %}
+{% load static %}
+{% block content %}
+<h2>Caregiver Registration Form</h2>
+<form method="post" enctype="multipart/form-data" class="card">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button class="btn btn-green" type="submit">Submit</button>
+</form>
+
+<!-- States/Districts mapping + dependent select -->
+<script src="{% static 'content/states_districts.js' %}"></script>
+<script>
+(function () {
+  // Expect window.statesAndDistricts from the static file.
+  var map = window.statesAndDistricts || {};
+  var $state = document.getElementById("id_state");
+  var $district = document.getElementById("id_district");
+  if (!$state || !$district) return;
+
+  function renderDistricts(state, keepCurrent) {
+    var list = [];
+    if (state === "NULL") {
+      list = ["NULL"];
+    } else {
+      list = (map[state] || []).filter(function (d) { return d && d !== "Select district"; });
+    }
+
+    var current = keepCurrent ? $district.value : "";
+    // Clear
+    while ($district.options.length) $district.remove(0);
+
+    if (state !== "NULL") {
+      $district.add(new Option("Select a District", ""));
+    }
+    list.forEach(function (d) { $district.add(new Option(d, d)); });
+
+    // Try to keep previous selection if still present
+    if (keepCurrent && current) {
+      for (var i = 0; i < $district.options.length; i++) {
+        if ($district.options[i].value === current) {
+          $district.selectedIndex = i; break;
+        }
+      }
+    }
+  }
+
+  // Initial paint (e.g., when browser restores form after a validation error)
+  renderDistricts($state.value, /*keepCurrent*/true);
+
+  // On change
+  $state.addEventListener("change", function () {
+    renderDistricts($state.value, false);
+  });
+})();
+</script>
+{% endblock %}
