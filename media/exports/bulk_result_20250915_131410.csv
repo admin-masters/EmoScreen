@@ -1,0 +1,4 @@
+#,Doctor Name,WhatsApp,Email,Status,Message
+1,Khushan Poptani,9084712373,khushan.poptani@inditech.co.in,FAILED,Email must be a valid Gmail/Googlemail address
+2,Niomi Samani,9429633099,niomi.samani@inditech.co.in,FAILED,Email must be a valid Gmail/Googlemail address
+3,Bharti Samani,123456,bhartisamani@gmail.com,FAILED,WhatsApp Number must be exactly 10 digits

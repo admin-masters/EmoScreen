@@ -1,0 +1,19 @@
+{% extends "content/base.html" %}
+{% block content %}
+<h2>Verify your WhatsApp number</h2>
+
+{% if error %}
+  <div class="card" style="border-color:#ef4444;color:#b91c1c">{{ error }}</div>
+{% else %}
+  <div class="muted">For your security, please confirm the WhatsApp number on which you received the link.</div>
+{% endif %}
+
+<form method="post" class="card">
+  {% csrf_token %}
+  <label>Enter your WhatsApp number</label>
+  <input type="tel" name="parent_phone" required placeholder="e.g. 98XXXXXXXX" />
+  <button class="btn btn-green" type="submit">Verify & Continue</button>
+</form>
+
+<p class="muted">Tip: Enter the same number (10 digits) that the clinic messaged.</p>
+{% endblock %}

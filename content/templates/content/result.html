@@ -1,0 +1,33 @@
+{% extends "content/base.html" %}
+{% block content %}
+<h2>Your Report</h2>
+<div class="card">
+  {% if flags_count == 0 %}
+    <p>{{ no_flags_msg }}</p>
+  {% else %}
+    <div class="card">
+      <p><strong>Based on your answers, the following warning signs are noticed in the child.</strong></p>
+      <p>Please capture this screen and show it to {{ pro.salutation }} {{ pro.first_name }} {{ pro.last_name }}.</p>
+      <p>Your report has also been emailed to {{ pro.salutation }} {{ pro.first_name }} {{ pro.last_name }}.</p>
+      <p>Please visit {{ pro.salutation }} {{ pro.first_name }} {{ pro.last_name }} immediately if you have not already visited him recently for this condition.</p>
+
+      <ul>
+        {% for lbl in rf_labels %}
+          <li>{{ lbl }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- Patient CTAs (visible only when red flags exist) -->
+    <div style="margin-top:16px">
+      {% if call_link %}
+        <p><a class="btn btn-red" href="{{ call_link }}">CALL TO BOOK DOCTOR APPOINTMENT</a></p>
+      {% endif %}
+      {% if wa_link %}
+        <p><a class="btn" href="{{ wa_link }}" target="_blank" rel="noopener">SEND MESSAGE TO BOOK DOCTOR APPOINTMENT</a></p>
+      {% endif %}
+    </div>
+  {% endif %}
+  <p class="muted">Report Code: {{ report_code }} (keep this for future reference)</p>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "content/base.html" %}
+{% block content %}
+<h2>Please select language</h2>
+<div class="card">
+  <div class="btn-grid">
+    {% for l in languages %}
+      <a class="btn btn-sm" href="{% url 'content:screening_form' pro.unique_doctor_code l.lang_code %}">
+        {{ l.lang_name_english }}
+      </a>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}

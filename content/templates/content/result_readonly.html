@@ -1,0 +1,17 @@
+{% extends "content/base.html" %}
+{% block content %}
+<h2>Report {{ report_code }}</h2>
+<div class="card">
+  {% if rf_labels %}
+    <ul>{% for label in rf_labels %}<li>{{ label }}</li>{% endfor %}</ul>
+    <h4>Doctor Education</h4>
+    <ul>
+      {% for link in education_links %}
+        <li><a href="{{ link }}" target="_blank">Open</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No red flags identified.</p>
+  {% endif %}
+</div>
+{% endblock %}
