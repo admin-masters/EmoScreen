@@ -1,0 +1,89 @@
+{% extends "content/base.html" %}
+{% load static %}
+{% block content %}
+<h2>Caregiver Registration Form</h2>
+<form method="post" enctype="multipart/form-data" class="card">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button class="btn btn-green" type="submit">Submit</button>
+</form>
+
+<!-- Gmail input UI enhancement -->
+<script>
+(function() {
+  var email = document.getElementById("id_email");
+  if (!email) return;
+
+  var wrapper = document.createElement("div");
+  wrapper.style.display = "flex";
+  wrapper.style.alignItems = "center";
+  wrapper.style.gap = "6px";
+
+  var prefix = document.createElement("input");
+  prefix.type = "text";
+  prefix.id = "id_email_prefix";
+  prefix.required = true;
+  prefix.pattern = "[A-Za-z0-9._%+-]+";
+  prefix.placeholder = "your.name";
+  prefix.style.flex = "0 1 240px";
+
+  var suffix = document.createElement("span");
+  suffix.textContent = "@gmail.com";
+
+  email.parentNode.insertBefore(wrapper, email);
+  wrapper.appendChild(prefix);
+  wrapper.appendChild(suffix);
+
+  email.type = "hidden";
+
+  var v = (email.value || "");
+  if (/@gmail\.com$/i.test(v)) {
+    prefix.value = v.replace(/@gmail\.com$/i, "");
+  }
+
+  var form = email.closest("form");
+  form.addEventListener("submit", function() {
+    email.value = (prefix.value || "").trim() + "@gmail.com";
+  });
+})();
+</script>
+
+<!-- States/Districts mapping + dependent select -->
+<script src="{% static 'content/states_districts.js' %}"></script>
+<script>
+(function () {
+  var map = window.statesAndDistricts || {};
+  var $state = document.getElementById("id_state");
+  var $district = document.getElementById("id_district");
+  if (!$state || !$district) return;
+
+  function renderDistricts(state, keepCurrent) {
+    var list = state === "NULL" ? ["NULL"] : (map[state] || []).filter(function (d) {
+      return d && d !== "Select district";
+    });
+
+    var current = keepCurrent ? $district.value : "";
+    while ($district.options.length) $district.remove(0);
+    if (state !== "NULL") {
+      $district.add(new Option("Select a District", ""));
+    }
+    list.forEach(function (d) {
+      $district.add(new Option(d, d));
+    });
+
+    if (keepCurrent && current) {
+      for (var i = 0; i < $district.options.length; i++) {
+        if ($district.options[i].value === current) {
+          $district.selectedIndex = i; break;
+        }
+      }
+    }
+  }
+
+  renderDistricts($state.value, true);
+  $state.addEventListener("change", function () {
+    renderDistricts($state.value, false);
+  });
+})();
+</script>
+{% endblock %}

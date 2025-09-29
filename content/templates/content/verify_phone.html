@@ -1,0 +1,22 @@
+{% extends "content/base.html" %}
+{% block content %}
+<h2>{{ ui.verify_title }}</h2>
+
+{% if error %}
+  <div class="card" style="border-color:#ef4444;color:#b91c1c">{{ error }}</div>
+{% else %}
+  <div class="muted">{{ ui.verify_subtitle }}</div>
+{% endif %}
+
+<form method="post" class="card">
+  {% csrf_token %}
+  <label>{{ ui.verify_label }}</label>
+  <input type="tel" name="parent_phone" required placeholder="{{ ui.verify_placeholder }}" />
+  <button class="btn btn-green" type="submit">{{ ui.verify_button }}</button>
+</form>
+
+<p class="muted">
+  {{ ui.verify_terms_prefix }}
+  <a href="{% url 'content:terms_public' %}" target="_blank" rel="noopener">{{ ui.verify_terms_link }}</a>.
+</p>
+{% endblock %}
