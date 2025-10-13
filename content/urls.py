@@ -33,5 +33,9 @@ urlpatterns = [
 
     path("terms/<code>/", views.terms_accept, name="terms_accept"),
     path("terms/", views.terms_public, name="terms_public"),
+    path("admin/reports/", views.reports_dashboard, name="reports_dashboard"),            # NEW
+    path("admin/reports/export/", views.reports_export, name="reports_export"),   
+    path("admin/bulk-upload/admin/reports/", views.reports_dashboard),                   # TEMP
+    path("admin/bulk-upload/admin/reports/export/", views.reports_export),               # TEMP
 
 ]

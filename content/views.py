@@ -9,6 +9,17 @@ from django.core.exceptions import ValidationError
 import csv
 import io
 import os
+# content/views.py  (new imports)
+import csv
+import io
+from datetime import datetime, timedelta
+from django.utils import timezone
+from django.http import HttpResponse
+from django.contrib.admin.views.decorators import staff_member_required
+
+from .forms import ReportFilterForm
+from .models import RegisteredProfessional, Submission
+
 from .i18n_static import get_ui_labels
 from .i18n_static import get_ui_labels
 from .models import UiString
@@ -1000,3 +1011,250 @@ def _aligned_rf_labels_and_links(rf_ids, lang, request):
         if slugs_by_id.get(rf, "")
     ]
     return rf_labels, education_links
+
+# content/views.py  (append at bottom)
+
+# ---------- Reports helpers ----------
+
+def _aware_range(date_from, date_to):
+    """
+    Convert date-only inputs to timezone-aware datetimes covering the full day range.
+    Returns (start_dt, end_dt) or (None, None) if not provided.
+    """
+    if not date_from and not date_to:
+        return None, None
+    tz = timezone.get_current_timezone()
+    if date_from:
+        start_dt = timezone.make_aware(datetime.combine(date_from, datetime.min.time()), tz)
+    else:
+        start_dt = None
+    if date_to:
+        # include full end day
+        end_dt = timezone.make_aware(datetime.combine(date_to, datetime.max.time()), tz)
+    else:
+        end_dt = None
+    return start_dt, end_dt
+
+def _filter_qs_by_range(qs, start_dt, end_dt, field="created_at"):
+    if start_dt:
+        qs = qs.filter(**{f"{field}__gte": start_dt})
+    if end_dt:
+        qs = qs.filter(**{f"{field}__lte": end_dt})
+    return qs
+
+def _last_24h_window():
+    now = timezone.now()
+    return now - timedelta(hours=24)
+
+# content/views.py  (drop-in replacements)
+
+import csv
+from datetime import datetime, timedelta
+from django.utils import timezone
+from django.http import HttpResponse, Http404
+from django.contrib.admin.views.decorators import staff_member_required
+
+from .forms import ReportFilterForm
+from .models import RegisteredProfessional, Submission
+
+# Category constants
+REG_DOCTORS    = "registrations_doctors"
+REG_CAREGIVERS = "registrations_caregivers"
+SUB_DOCTORS    = "submissions_doctors"
+SUB_CAREGIVERS = "submissions_caregivers"
+VALID_CATEGORIES = {REG_DOCTORS, REG_CAREGIVERS, SUB_DOCTORS, SUB_CAREGIVERS}
+
+def _aware_range(date_from, date_to):
+    """Convert date-only inputs to timezone-aware datetimes covering the full day."""
+    if not date_from and not date_to:
+        return None, None
+    tz = timezone.get_current_timezone()
+    start_dt = timezone.make_aware(datetime.combine(date_from, datetime.min.time()), tz) if date_from else None
+    end_dt   = timezone.make_aware(datetime.combine(date_to,   datetime.max.time()), tz) if date_to   else None
+    return start_dt, end_dt
+
+def _filter_qs_by_range(qs, start_dt, end_dt, field="created_at"):
+    if start_dt:
+        qs = qs.filter(**{f"{field}__gte": start_dt})
+    if end_dt:
+        qs = qs.filter(**{f"{field}__lte": end_dt})
+    return qs
+
+def _category_qs(category, start_dt=None, end_dt=None):
+    """Return (qs, headers, row_builder) for the selected category."""
+    if category == REG_DOCTORS:
+        qs = RegisteredProfessional.objects.filter(role=RegisteredProfessional.Role.PEDIATRICIAN).order_by("-created_at")
+        qs = _filter_qs_by_range(qs, start_dt, end_dt, field="created_at")
+        headers = ["first_name","last_name","email","role","whatsapp","state","district",
+                   "created_at","unique_doctor_code","terms_accepted_at"]
+        def row(o):
+            return [
+                o.first_name, o.last_name, o.email, o.role, o.whatsapp, o.state, o.district,
+                timezone.localtime(o.created_at).strftime("%Y-%m-%d %H:%M:%S"),
+                o.unique_doctor_code,
+                timezone.localtime(o.terms_accepted_at).strftime("%Y-%m-%d %H:%M:%S") if o.terms_accepted_at else "",
+            ]
+        return qs, headers, row
+
+    if category == REG_CAREGIVERS:
+        qs = RegisteredProfessional.objects.filter(role=RegisteredProfessional.Role.CAREGIVER).order_by("-created_at")
+        qs = _filter_qs_by_range(qs, start_dt, end_dt, field="created_at")
+        headers = ["first_name","last_name","email","role","whatsapp","state","district",
+                   "created_at","unique_doctor_code","terms_accepted_at"]
+        def row(o):
+            return [
+                o.first_name, o.last_name, o.email, o.role, o.whatsapp, o.state, o.district,
+                timezone.localtime(o.created_at).strftime("%Y-%m-%d %H:%M:%S"),
+                o.unique_doctor_code,
+                timezone.localtime(o.terms_accepted_at).strftime("%Y-%m-%d %H:%M:%S") if o.terms_accepted_at else "",
+            ]
+        return qs, headers, row
+
+    if category == SUB_DOCTORS:
+        qs = Submission.objects.filter(
+            professional__role=RegisteredProfessional.Role.PEDIATRICIAN
+        ).select_related("professional","lang").order_by("-created_at")
+        qs = _filter_qs_by_range(qs, start_dt, end_dt, field="created_at")
+        headers = ["report_code","doctor_first_name","doctor_last_name","doctor_email",
+                   "role","lang","email_to","email_sent_at","created_at"]
+        def row(o):
+            return [
+                o.report_code,
+                o.professional.first_name, o.professional.last_name, o.professional.email,
+                o.professional.role, o.lang.lang_code,
+                o.email_to,
+                timezone.localtime(o.email_sent_at).strftime("%Y-%m-%d %H:%M:%S") if o.email_sent_at else "",
+                timezone.localtime(o.created_at).strftime("%Y-%m-%d %H:%M:%S"),
+            ]
+        return qs, headers, row
+
+    if category == SUB_CAREGIVERS:
+        qs = Submission.objects.filter(
+            professional__role=RegisteredProfessional.Role.CAREGIVER
+        ).select_related("professional","lang").order_by("-created_at")
+        qs = _filter_qs_by_range(qs, start_dt, end_dt, field="created_at")
+        headers = ["report_code","caregiver_first_name","caregiver_last_name","caregiver_email",
+                   "role","lang","email_to","email_sent_at","created_at"]
+        def row(o):
+            return [
+                o.report_code,
+                o.professional.first_name, o.professional.last_name, o.professional.email,
+                o.professional.role, o.lang.lang_code,
+                o.email_to,
+                timezone.localtime(o.email_sent_at).strftime("%Y-%m-%d %H:%M:%S") if o.email_sent_at else "",
+                timezone.localtime(o.created_at).strftime("%Y-%m-%d %H:%M:%S"),
+            ]
+        return qs, headers, row
+
+    raise ValueError("Unknown category")
+
+def _csv_filename(category):
+    return f"{category}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+@staff_member_required
+def reports_dashboard(request):
+    """
+    Admin dashboard with totals and optional detail tables.
+    Never uses form.cleaned_data unless is_valid() has been called.
+    Also supports ?quick=24h to force last 24-hour window for details.
+    """
+    # Totals and 24h counters
+    last24 = timezone.now() - timedelta(hours=24)
+
+    reg_docs_total = RegisteredProfessional.objects.filter(
+        role=RegisteredProfessional.Role.PEDIATRICIAN
+    ).count()
+    reg_docs_24h = RegisteredProfessional.objects.filter(
+        role=RegisteredProfessional.Role.PEDIATRICIAN, created_at__gte=last24
+    ).count()
+
+    reg_care_total = RegisteredProfessional.objects.filter(
+        role=RegisteredProfessional.Role.CAREGIVER
+    ).count()
+    reg_care_24h = RegisteredProfessional.objects.filter(
+        role=RegisteredProfessional.Role.CAREGIVER, created_at__gte=last24
+    ).count()
+
+    sub_docs_total = Submission.objects.filter(
+        professional__role=RegisteredProfessional.Role.PEDIATRICIAN
+    ).count()
+    sub_docs_24h = Submission.objects.filter(
+        professional__role=RegisteredProfessional.Role.PEDIATRICIAN, created_at__gte=last24
+    ).count()
+
+    sub_care_total = Submission.objects.filter(
+        professional__role=RegisteredProfessional.Role.CAREGIVER
+    ).count()
+    sub_care_24h = Submission.objects.filter(
+        professional__role=RegisteredProfessional.Role.CAREGIVER, created_at__gte=last24
+    ).count()
+
+    # Form for date filters (used only for rendering; safe to bind)
+    form = ReportFilterForm(request.GET or None)
+
+    # Safely compute date range
+    date_from = date_to = None
+    if form.is_bound and form.is_valid():
+        date_from = form.cleaned_data.get("date_from")
+        date_to   = form.cleaned_data.get("date_to")
+
+    start_dt, end_dt = _aware_range(date_from, date_to)
+
+    # quick=24h overrides any date range, to exactly last 24h
+    if request.GET.get("quick") == "24h":
+        end_dt = timezone.now()
+        start_dt = end_dt - timedelta(hours=24)
+
+    # Details table
+    category = request.GET.get("detail")
+    detail_rows, detail_headers = [], []
+    if category in VALID_CATEGORIES:
+        qs, headers, rowb = _category_qs(category, start_dt, end_dt)
+        detail_headers = headers
+        for o in qs[:500]:
+            detail_rows.append(rowb(o))
+
+    ctx = {
+        "form": form,
+        "last24": last24,
+        "reg_docs_total": reg_docs_total, "reg_docs_24h": reg_docs_24h,
+        "reg_care_total": reg_care_total, "reg_care_24h": reg_care_24h,
+        "sub_docs_total": sub_docs_total, "sub_docs_24h": sub_docs_24h,
+        "sub_care_total": sub_care_total, "sub_care_24h": sub_care_24h,
+        "detail": category,
+        "detail_headers": detail_headers,
+        "detail_rows": detail_rows,
+    }
+    return render(request, "content/admin_reports.html", ctx)
+
+@staff_member_required
+def reports_export(request):
+    """
+    CSV download. Accepts category + optional date_from/date_to + optional quick=24h.
+    """
+    category = request.GET.get("category")
+    if category not in VALID_CATEGORIES:
+        raise Http404("Invalid category")
+
+    form = ReportFilterForm(request.GET or None)
+
+    date_from = date_to = None
+    if form.is_bound and form.is_valid():
+        date_from = form.cleaned_data.get("date_from")
+        date_to   = form.cleaned_data.get("date_to")
+
+    start_dt, end_dt = _aware_range(date_from, date_to)
+
+    if request.GET.get("quick") == "24h":
+        end_dt = timezone.now()
+        start_dt = end_dt - timedelta(hours=24)
+
+    qs, headers, rowb = _category_qs(category, start_dt, end_dt)
+
+    resp = HttpResponse(content_type="text/csv")
+    resp["Content-Disposition"] = f'attachment; filename="{_csv_filename(category)}"'
+    writer = csv.writer(resp)
+    writer.writerow(headers)
+    for obj in qs.iterator():
+        writer.writerow(rowb(obj))
+    return resp

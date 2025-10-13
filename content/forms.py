@@ -152,3 +152,19 @@ class BulkDoctorUploadForm(forms.Form):
         if f.size > 2 * 1024 * 1024:
             raise forms.ValidationError("CSV too large (limit ~2MB)")
         return f
+
+# content/forms.py  (append at bottom)
+from django import forms
+from django.utils import timezone
+
+class ReportFilterForm(forms.Form):
+    
+    date_from = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+    date_to   = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
+
+    def clean(self):
+        data = super().clean()
+        df, dt = data.get("date_from"), data.get("date_to")
+        if df and dt and df > dt:
+            raise forms.ValidationError("Start date must be on or before end date.")
+        return data
