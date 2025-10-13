@@ -6,6 +6,9 @@
   <a class="btn" href="{% url 'content:register_caregiver' %}" style="margin-left:10px">I am a Caregiver</a>
   {% if request.user.is_staff %}
   <a class="btn" href="{% url 'content:bulk_doctor_upload' %}" style="margin-left:10px">Bulk Doctor CSV Upload</a>
+ 
+  <a class="btn" href="{% url 'content:reports_dashboard' %}" style="margin-left:10px">View Reports</a>   <!-- NEW -->
+
 {% endif %}
 
 </div>

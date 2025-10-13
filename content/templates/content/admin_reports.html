@@ -1,0 +1,558 @@
+<!-- content/templates/content/admin_reports.html -->
+{% extends "content/base.html" %}
+{% block extra_styles %}
+<style>
+  /* === Enhanced Styles for Admin Reports Page === */
+  :root {
+    --primary: #4361ee;
+    --primary-light: #4895ef;
+    --secondary: #3f37c9;
+    --success: #4cc9f0;
+    --danger: #f72585;
+    --warning: #f8961e;
+    --info: #4895ef;
+    --light: #f8f9fa;
+    --dark: #212529;
+    --bg: #f5f7fb;
+    --bg-card: #ffffff;
+    --text: #333333;
+    --text-light: #6c757d;
+    --border: #dee2e6;
+    --border-light: #e9ecef;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --gap: 1.25rem;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+  }
+
+  h2 {
+    color: var(--dark);
+    margin-bottom: 1.5rem;
+    font-weight: 700;
+    font-size: 1.8rem;
+  }
+
+  h3 {
+    color: var(--dark);
+    margin-bottom: 1.25rem;
+    font-weight: 600;
+    font-size: 1.3rem;
+    position: relative;
+    padding-bottom: 0.75rem;
+  }
+
+  h3::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 40px;
+    height: 3px;
+    background: linear-gradient(to right, var(--primary), var(--primary-light));
+    border-radius: 2px;
+  }
+
+  /* Form card styling */
+  .filter-card {
+    padding: 1.75rem;
+    background-color: var(--bg-card);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--gap);
+    align-items: flex-end;
+    box-shadow: var(--shadow);
+    margin-bottom: 2rem;
+    transition: all 0.3s ease;
+  }
+
+  .filter-card:hover {
+    box-shadow: var(--shadow-lg);
+  }
+
+  .filter-card > div {
+    flex: 1 1 200px;
+    min-width: 200px;
+  }
+
+  .filter-card label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-light);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .filter-card input[type="date"] {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    background-color: var(--bg-card);
+    transition: all 0.2s ease;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  .filter-card input[type="date"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+  }
+
+  .btn,
+  .btn-green {
+    margin-top: 0;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 42px;
+  }
+
+  .btn-green {
+    background-color: var(--primary);
+    color: white;
+  }
+
+  .btn-green:hover {
+    background-color: var(--secondary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .btn {
+    background-color: var(--light);
+    color: var(--dark);
+    border: 1px solid var(--border);
+  }
+
+  .btn:hover {
+    background-color: #e9ecef;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .muted {
+    flex-basis: 100%;
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-light);
+    background-color: #f8f9fa;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--primary);
+  }
+
+  /* Metrics grid: show cards side-by-side on wider screens */
+  .metrics-grid {
+    display: flex;
+    gap: 1.5rem;
+    align-items: stretch;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  /* FIXED: Each card has the same fixed height */
+  .metrics-grid .metric-card {
+    flex: 1 1 360px;
+    min-width: 320px;
+    background-color: var(--bg-card);
+    padding: 1.75rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    min-height: 380px; /* Fixed minimum height */
+    height: 380px; /* Fixed height for all cards */
+  }
+
+  .metrics-grid .metric-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Card internal spacing */
+  .metric-card h3 {
+    margin: 0 0 1.25rem 0;
+    font-size: 1.25rem;
+    flex-shrink: 0; /* Prevent heading from shrinking */
+  }
+
+  /* Table container with fixed height */
+  .table-container {
+    overflow: auto;
+    flex-grow: 1; /* Take remaining space */
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Table styling with fixed layout */
+  .metric-card table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+    table-layout: fixed; /* Fixed layout for consistent columns */
+    flex-grow: 1; /* Table fills available space */
+  }
+
+  /* Fixed column widths to ensure consistency */
+  .metric-card th:nth-child(1),
+  .metric-card td:nth-child(1) {
+    width: 45%; /* Metric column */
+  }
+
+  .metric-card th:nth-child(2),
+  .metric-card td:nth-child(2) {
+    width: 27.5%; /* Cumulative column */
+  }
+
+  .metric-card th:nth-child(3),
+  .metric-card td:nth-child(3) {
+    width: 27.5%; /* Last 24 Hours column */
+  }
+
+  .metric-card th, .metric-card td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: top; /* Align to top to handle multi-line content */
+    word-wrap: break-word;
+    height: 60px; /* Fixed row height */
+  }
+
+  .metric-card th {
+    background-color: var(--bg);
+    color: var(--text-light);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+  }
+
+  .metric-card tbody tr:nth-child(even) {
+    background-color: #f9fbff;
+  }
+
+  .metric-card tbody tr:hover {
+    background-color: #eef3ff;
+    transition: background-color 0.2s ease;
+  }
+
+  .metric-card td a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+    width: 100%;
+  }
+
+  .metric-card td a:hover {
+    text-decoration: underline;
+    background-color: rgba(67, 97, 238, 0.1);
+  }
+
+  /* Detail card keeps consistent styling */
+  .details-card {
+    margin-top: 2.5rem;
+    padding: 1.75rem;
+    background-color: var(--bg-card);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+  }
+
+  .details-card:hover {
+    box-shadow: var(--shadow-lg);
+  }
+
+  .btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    border-radius: var(--radius-sm);
+    background-color: var(--primary);
+    color: white;
+    text-decoration: none;
+    display: inline-block;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+  }
+
+  .btn-sm:hover {
+    background-color: var(--secondary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Metric value styling */
+  .metric-value {
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+
+  /* Empty cell handling */
+  .metric-card td:empty::before {
+    content: "-";
+    color: var(--text-light);
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 880px) {
+    .metrics-grid {
+      gap: 1rem;
+    }
+
+    .metrics-grid .metric-card {
+      flex: 1 1 100%;
+      min-width: 100%;
+      min-height: 350px; /* Slightly smaller on mobile */
+      height: auto; /* Allow natural height on mobile */
+    }
+
+    .filter-card {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .filter-card > div {
+      width: 100%;
+    }
+
+    .filter-card .btn,
+    .filter-card .btn-green {
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+
+    .filter-card .muted {
+      margin-top: 1rem;
+    }
+
+    /* Adjust table layout for mobile */
+    .metric-card table {
+      table-layout: auto; /* Allow natural widths on mobile */
+    }
+
+    .metric-card th:nth-child(1),
+    .metric-card td:nth-child(1),
+    .metric-card th:nth-child(2),
+    .metric-card td:nth-child(2),
+    .metric-card th:nth-child(3),
+    .metric-card td:nth-child(3) {
+      width: auto; /* Natural widths on mobile */
+    }
+  }
+
+  /* Animation for page load */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .metrics-grid .metric-card {
+    animation: fadeInUp 0.5s ease forwards;
+  }
+
+  .metrics-grid .metric-card:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+
+  /* Custom scrollbar for tables */
+  .table-container::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+
+  .table-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+
+  .table-container::-webkit-scrollbar-thumb {
+    background: var(--primary-light);
+    border-radius: 10px;
+  }
+
+  .table-container::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2>Admin Reports</h2>
+
+<form method="get" class="filter-card">
+  <div>
+    <label for="date_from">From</label>
+    {{ form.date_from }}
+  </div>
+  <div>
+    <label for="date_to">To</label>
+    {{ form.date_to }}
+  </div>
+  <div style="display:flex;gap:10px;align-items:flex-end">
+    <button class="btn btn-green" type="submit">Apply</button>
+    <a class="btn" href="{% url 'content:reports_dashboard' %}">Reset</a>
+  </div>
+  <div class="muted">Last 24 hours window starts at: {{ last24|date:"Y-m-d H:i" }}</div>
+</form>
+
+<div class="metrics-grid">
+  <!-- Registration Metrics -->
+  <div class="metric-card" aria-label="Registration Metrics">
+    <h3>Registration Metrics</h3>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Cumulative</th>
+            <th>Last 24 Hours</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Number of Doctors Registered</td>
+            <td>
+              <a href="{% url 'content:reports_dashboard' %}?detail=registrations_doctors{% if form.date_from.value %}&date_from={{ form.date_from.value }}{% endif %}{% if form.date_to.value %}&date_to={{ form.date_to.value }}{% endif %}">
+                {{ reg_docs_total }}
+              </a>
+            </td>
+            <td><a href="{% url 'content:reports_dashboard' %}?detail=registrations_doctors&quick=24h">{{ reg_docs_24h }}</a></td>
+          </tr>
+          <tr>
+            <td>Number of Caregivers Registered</td>
+            <td>
+              <a href="{% url 'content:reports_dashboard' %}?detail=registrations_caregivers{% if form.date_from.value %}&date_from={{ form.date_from.value }}{% endif %}{% if form.date_to.value %}&date_to={{ form.date_to.value }}{% endif %}">
+                {{ reg_care_total }}
+              </a>
+            </td>
+            <td><a href="{% url 'content:reports_dashboard' %}?detail=registrations_caregivers&quick=24h">{{ reg_care_24h }}</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Submission Metrics -->
+  <div class="metric-card" aria-label="Form Submission Metrics">
+    <h3>Form Submission Metrics</h3>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Cumulative</th>
+            <th>Last 24 Hours</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Forms Sent by Doctors</td>
+            <td>
+              <a href="{% url 'content:reports_dashboard' %}?detail=submissions_doctors{% if form.date_from.value %}&date_from={{ form.date_from.value }}{% endif %}{% if form.date_to.value %}&date_to={{ form.date_to.value }}{% endif %}">
+                {{ sub_docs_total }}
+              </a>
+            </td>
+            <td><a href="{% url 'content:reports_dashboard' %}?detail=submissions_doctors&quick=24h">{{ sub_docs_24h }}</a></td>
+          </tr>
+          <tr>
+            <td>Forms Sent by Caregivers</td>
+            <td>
+              <a href="{% url 'content:reports_dashboard' %}?detail=submissions_caregivers{% if form.date_from.value %}&date_from={{ form.date_from.value }}{% endif %}{% if form.date_to.value %}&date_to={{ form.date_to.value }}{% endif %}">
+                {{ sub_care_total }}
+              </a>
+            </td>
+            <td><a href="{% url 'content:reports_dashboard' %}?detail=submissions_caregivers&quick=24h">{{ sub_care_24h }}</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if detail %}
+  <div class="details-card">
+    <h3>
+      Details — 
+      {% if detail == "registrations_doctors" %}
+        Number of Doctors Registered
+      {% elif detail == "registrations_caregivers" %}
+        Number of Caregivers Registered
+      {% elif detail == "submissions_doctors" %}
+        Forms Sent by Doctors
+      {% elif detail == "submissions_caregivers" %}
+        Forms Sent by Caregivers
+      {% else %}
+        {{ detail|title }}
+      {% endif %}
+    </h3>
+
+    <div style="margin:1rem 0">
+      <a class="btn-sm" href="{% url 'content:reports_export' %}?category={{ detail }}{% if form.date_from.value %}&date_from={{ form.date_from.value }}{% endif %}{% if form.date_to.value %}&date_to={{ form.date_to.value }}{% endif %}{% if request.GET.quick %}&quick={{ request.GET.quick }}{% endif %}">Export CSV</a>
+    </div>
+
+    {% if detail_rows %}
+      <div style="max-width:100%;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:600px">
+          <thead>
+            <tr>
+              {% for h in detail_headers %}
+                <th style="text-align:left;border-bottom:1px solid #ddd;padding:8px 10px">{{ h }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in detail_rows %}
+              <tr>
+                {% for c in r %}
+                  <td style="border-bottom:1px solid #f0f0f0;padding:8px 10px">{{ c }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="muted">No records found for the selected range.</p>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% endblock %}
