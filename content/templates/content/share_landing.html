@@ -1,0 +1,64 @@
+{% extends "content/base.html" %}
+
+{% block content %}
+
+<h2>Start Screening</h2>
+
+{% if error %}
+  <div class="card" style="border-color:#ef4444;color:#b91c1c">{{ error }}</div>
+{% endif %}
+
+<!-- Center the card and make it responsive -->
+<div class="card" style="max-width:560px; margin: 0 auto; padding: 1.5rem;">
+  <p class="muted">
+    Please enter the clinic’s phone number and your WhatsApp number to begin.
+  </p>
+  <form method="post">
+    {% csrf_token %}
+    <label>Clinic/Doctor Number</label>
+    <input type="tel" name="clinic_phone" required placeholder="Clinic number shown at reception" />
+
+    <label>Your WhatsApp Number</label>
+    <input type="tel" name="parent_phone" required placeholder="10-digit number" />
+
+    <button class="btn btn-green" type="submit">Continue</button>
+  </form>
+</div>
+
+
+{% endblock %}
+
+<style>
+  /* Make sure the card is centered on mobile */
+  .card {
+    margin: 0 auto;
+    max-width: 560px; /* This keeps the width of the form centered */
+    padding: 1.5rem;
+  }
+
+  /* Adjust input fields and button to be full-width on smaller screens */
+  input[type="tel"], button {
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+
+  /* Responsive adjustments for small screens */
+  @media (max-width: 639px) {
+    h2 {
+      font-size: 1.5rem;
+    }
+
+    .card {
+      padding: 1.25rem; /* Adjust padding for mobile */
+    }
+
+    input[type="tel"] {
+      font-size: 1rem;
+    }
+
+    button {
+      padding: 1rem;
+    }
+  }
+</style>
+

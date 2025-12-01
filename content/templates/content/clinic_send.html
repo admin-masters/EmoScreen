@@ -1,6 +1,8 @@
 {% extends "content/base.html" %}
+
 {% block content %}
 <h2>Send Form to Parent</h2>
+
 <form method="post" class="card">
   {% csrf_token %}
   <label>Enter Parent's WhatsApp No.</label>
@@ -12,4 +14,30 @@
   </div>
   <p class="muted">We’ll open WhatsApp with a pre‑filled message in the selected language that contains the patient link.</p>
 </form>
+
+<div class="card" style="margin-bottom:16px">
+  <h3>Bulk Share (QR & Link)</h3>
+  <p class="muted">Patients can scan this QR or open the link to start the screening on their own.</p>
+  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
+    <img src="{% url 'content:doctor_qr_svg' pro.unique_doctor_code %}" alt="Clinic QR"
+         style="width:180px;height:auto;border:1px solid #eee;padding:4px;background:#fff" />
+
+    <div style="min-width:280px">
+      <div><strong>Share Link:</strong></div>
+      <div class="mono" style="word-break:break-all">{{ share_url }}</div>
+
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" type="button"
+                onclick="navigator.clipboard.writeText('{{ share_url }}')">Copy Link</button>
+        <a class="btn" href="{% url 'content:doctor_qr_svg' pro.unique_doctor_code %}?download=1">
+          Download QR
+        </a>
+        <a class="btn" target="_blank" rel="noopener"
+           href="{% url 'content:share_landing' pro.unique_doctor_code %}">Open</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 {% endblock %}
