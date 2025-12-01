@@ -5,11 +5,22 @@ import secrets
 import urllib.parse
 import requests
 from django.conf import settings
+from django.core import signing
 from django.core import signing  # NEW import added here
 _VERI_SALT = "verify-phone-v1"  # keep your existing salt
 
 def last10_digits(s: str) -> str:
     return re.sub(r"\D", "", s or "")[-10:]
+
+def clinic_valid_last10_set(pro) -> set[str]:
+    """
+    The clinic can publish any of these numbers. We accept a match against last-10 digits.
+    """
+    return {
+        last10_digits(pro.appointment_booking_number),
+        last10_digits(pro.receptionist_whatsapp),
+        last10_digits(pro.whatsapp),
+    } - {""}
 
 def make_verify_token(pro_code: str, parent_phone: str, lang: str | None = None) -> str:
     """

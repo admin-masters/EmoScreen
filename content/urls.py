@@ -37,5 +37,6 @@ urlpatterns = [
     path("admin/reports/export/", views.reports_export, name="reports_export"),   
     path("admin/bulk-upload/admin/reports/", views.reports_dashboard),                   # TEMP
     path("admin/bulk-upload/admin/reports/export/", views.reports_export),               # TEMP
-
+    path("share/<code>/", views.share_landing, name="share_landing"),      # NEW (patient entry)
+    path("qr/<code>.svg", views.doctor_qr_svg, name="doctor_qr_svg"),     # NEW (SVG image)
 ]

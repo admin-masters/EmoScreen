@@ -12,11 +12,14 @@ import os
 # content/views.py  (new imports)
 import csv
 import io
+import qrcode
+from qrcode.image.svg import SvgImage
+from django.views.decorators.http import require_http_methods
 from datetime import datetime, timedelta
 from django.utils import timezone
 from django.http import HttpResponse
 from django.contrib.admin.views.decorators import staff_member_required
-
+import re
 from .forms import ReportFilterForm
 from .models import RegisteredProfessional, Submission
 
@@ -45,7 +48,7 @@ from .utils import (
     generate_doctor_code, normalize_phone, whatsapp_link, parent_message,
     white_label_context, generate_report_code, ADVISE_PATIENT_TEXT,
     clinic_contact_numbers, booking_message_for_clinic, notify_registration,
-    make_verify_token, read_verify_token, last10_digits   # <-- NEW imports
+    make_verify_token, read_verify_token, last10_digits,clinic_valid_last10_set   # <-- NEW imports
 )
 
 # ---------- Registration ----------
@@ -157,8 +160,8 @@ def clinic_send(request, code):
             return redirect(wa_url)
     else:
         form = ClinicSendForm(lang_choices=lang_choices)
-
-    ctx = {"form": form, "pro": pro, **white_label_context(pro)}
+    share_url = request.build_absolute_uri(reverse("content:share_landing", args=[code]))
+    ctx = {"form": form, "pro": pro, "share_url": share_url, **white_label_context(pro)}
     return render(request, "content/clinic_send.html", ctx)
 # content/views.py
 from django.contrib.auth import logout
@@ -1257,4 +1260,55 @@ def reports_export(request):
     writer.writerow(headers)
     for obj in qs.iterator():
         writer.writerow(rowb(obj))
+    return resp
+
+
+@require_http_methods(["GET", "POST"])
+def share_landing(request, code):
+    """
+    Public landing for patients who scan/visit the doctor's share link.
+    Asks for clinic/doctor number (to confirm correct clinic) and patient's WhatsApp number.
+    On success -> set the same session verification flag used by your guard and redirect to language selection.
+    """
+    pro = get_object_or_404(RegisteredProfessional, unique_doctor_code=code)
+    error = ""
+
+    if request.method == "POST":
+        clinic_phone = request.POST.get("clinic_phone", "")
+        parent_phone = request.POST.get("parent_phone", "")
+
+        # 1) Clinic number must match any one of the doctor's known numbers (last 10 digits)
+        valid_set = clinic_valid_last10_set(pro)
+        if last10_digits(clinic_phone) not in valid_set:
+            error = "The clinic/doctor number you entered does not match this clinic. Please check with reception."
+
+        # 2) Patient WhatsApp must look like a 10-digit Indian mobile
+        if not error:
+            digits = re.sub(r"\D", "", parent_phone or "")
+            if len(digits) != 10:
+                error = "Please enter your 10-digit WhatsApp number."
+
+        if not error:
+            # Mark this browser/session as verified for this doctor
+            request.session[f"phone_verified_{code}"] = True
+            return redirect(reverse("content:parent_language_select", args=[code]))
+
+    ctx = {"pro": pro, "error": error, **white_label_context(pro)}
+    return render(request, "content/share_landing.html", ctx)
+
+def doctor_qr_svg(request, code):
+    """
+    Returns an SVG QR that encodes the public share URL (/share/<code>/).
+    Use ?download=1 to force download.
+    """
+    pro = get_object_or_404(RegisteredProfessional, unique_doctor_code=code)
+    share_url = request.build_absolute_uri(reverse("content:share_landing", args=[code]))
+
+    img = qrcode.make(share_url, image_factory=SvgImage, box_size=10, border=2)
+    buf = io.BytesIO()
+    img.save(buf)
+
+    resp = HttpResponse(buf.getvalue(), content_type="image/svg+xml")
+    if request.GET.get("download"):
+        resp["Content-Disposition"] = f'attachment; filename="EmoScreen-QR-{code}.svg"'
     return resp
