@@ -10,6 +10,10 @@ import csv
 import io
 import os
 # content/views.py  (new imports)
+from io import BytesIO
+import qrcode
+import re
+from django.db.models import Q
 import csv
 import io
 import qrcode
@@ -1300,15 +1304,142 @@ def doctor_qr_svg(request, code):
     """
     Returns an SVG QR that encodes the public share URL (/share/<code>/).
     Use ?download=1 to force download.
+
+    If someone passes 'global' as a code by mistake
+    (e.g., from a relative link), fall back to the universal QR.
     """
+    # New: fallback to universal QR
+    if str(code).lower() == "global":
+        return global_qr_svg(request)
+
     pro = get_object_or_404(RegisteredProfessional, unique_doctor_code=code)
-    share_url = request.build_absolute_uri(reverse("content:share_landing", args=[code]))
+    share_url = request.build_absolute_uri(
+        reverse("content:share_landing", args=[code])
+    )
 
     img = qrcode.make(share_url, image_factory=SvgImage, box_size=10, border=2)
     buf = io.BytesIO()
     img.save(buf)
 
     resp = HttpResponse(buf.getvalue(), content_type="image/svg+xml")
+
+    # Keep download behavior from original version
     if request.GET.get("download"):
-        resp["Content-Disposition"] = f'attachment; filename="EmoScreen-QR-{code}.svg"'
+        resp["Content-Disposition"] = (
+            f'attachment; filename="EmoScreen-QR-{code}.svg"'
+        )
+
     return resp
+
+
+@require_http_methods(["GET", "POST"])
+def global_start(request):
+    """
+    ONE public entry for all clinics: patient enters clinic/doctor number + their WhatsApp.
+    We locate a RegisteredProfessional and set the same session flag you already use, then
+    redirect directly to language selection (no second phone prompt).
+    """
+    error = ""
+    pro = None
+
+    if request.method == "POST":
+        clinic_phone = (request.POST.get("clinic_phone") or "").strip()
+        parent_phone = (request.POST.get("parent_phone") or "").strip()
+
+        c10 = last10_digits(clinic_phone)
+        p10 = last10_digits(normalize_phone(parent_phone))
+
+        if len(c10) != 10:
+            error = "Please enter the clinic/doctor number (10 digits)."
+        elif len(p10) != 10:
+            error = "Please enter your WhatsApp number (10 digits)."
+
+        if not error:
+            qs = RegisteredProfessional.objects.filter(
+                Q(appointment_booking_number__endswith=c10) |
+                Q(receptionist_whatsapp__endswith=c10) |
+                Q(whatsapp__endswith=c10)
+            ).order_by("-updated_at", "-created_at")
+            pro = qs.first()
+            if not pro:
+                error = "No registered clinic/doctor found for the number entered."
+
+    if request.method == "POST" and not error and pro:
+        code = pro.unique_doctor_code
+        #  Skip verify page – use the exact same session flag your guard checks.
+        request.session[f"phone_verified_{code}"] = True
+        request.session[f"parent_phone_{code}"] = "91" + p10  # optional to show masked number later
+        return redirect(reverse("content:parent_language_select", args=[code]))
+
+    return render(request, "content/global_start.html", {"error": error})
+
+@require_http_methods(["GET"])
+def global_qr_svg(request):
+    """Permanent QR that encodes the absolute /start/ URL."""
+    url = request.build_absolute_uri(reverse("content:global_start"))
+    img = qrcode.make(url, image_factory=SvgImage, box_size=10, border=2)
+    buf = io.BytesIO()
+    img.save(buf)
+    resp = HttpResponse(buf.getvalue(), content_type="image/svg+xml")
+    if request.GET.get("download"):
+        resp["Content-Disposition"] = 'attachment; filename="EmoScreen_Global_QR.svg"'
+    return resp
+
+@require_http_methods(["GET", "POST"])
+def universal_entry(request):
+    """
+    ONE public entry for everyone. Patient gives doctor code OR clinic number,
+    and their WhatsApp number. On success we set the verification flag and
+    jump directly to language selection (no second phone prompt).
+    """
+    error = ""
+    code_prefill = (request.GET.get("code") or "").strip().upper()
+    pro = None
+
+    if request.method == "POST":
+        doctor_code   = (request.POST.get("doctor_code")   or "").strip().upper()
+        clinic_number = (request.POST.get("clinic_number") or "").strip()
+        parent_phone  = (request.POST.get("parent_phone")  or "").strip()
+
+        if not parent_phone or (not doctor_code and not clinic_number):
+            error = "Please enter the doctor/clinic and your WhatsApp number."
+
+        # Try doctor code first
+        if not error and doctor_code:
+            pro = RegisteredProfessional.objects.filter(unique_doctor_code=doctor_code).first()
+            if not pro:
+                error = "No registered doctor/caregiver was found for the entered code."
+
+        # Else try clinic/doctor number (last 10 digits)
+        if not error and not pro and clinic_number:
+            last10 = last10_digits(normalize_phone(clinic_number))
+            if len(last10) != 10:
+                error = "Please enter a valid 10‑digit clinic/doctor number."
+            else:
+                qs = RegisteredProfessional.objects.filter(
+                    Q(whatsapp__endswith=last10) |
+                    Q(appointment_booking_number__endswith=last10) |
+                    Q(receptionist_whatsapp__endswith=last10)
+                ).order_by("-updated_at", "-created_at")
+                pro = qs.first()
+                if not pro:
+                    error = "No registered clinic matched that number. Please check with the clinic."
+
+        # Validate parent's WhatsApp basic shape (we add +91 later)
+        if not error:
+            p10 = last10_digits(parent_phone)
+            if len(p10) != 10:
+                error = "Please enter your 10‑digit WhatsApp number."
+
+        if not error and pro:
+            code = pro.unique_doctor_code
+            # >>> Set the SAME flag your language page checks. This skips /verify/.
+            request.session[f"phone_verified_{code}"] = True
+            # (Optional) store last-10 if you want to prefill the form's phone field later:
+            request.session[f"parent_last10_{code}"] = p10
+            return redirect(reverse("content:parent_language_select", args=[code]))
+
+    return render(request, "content/universal_entry.html", {
+        "error": error,
+        "doctor_code_prefill": code_prefill,
+    })
