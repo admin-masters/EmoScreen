@@ -1,16 +1,38 @@
 {% extends "content/base.html" %}
 {% block content %}
+
 <h2>Register</h2>
-<div class="card">
-  <a class="btn" href="{% url 'content:register_pediatrician' %}">I am a Pediatrician</a>
-  <a class="btn" href="{% url 'content:register_caregiver' %}" style="margin-left:10px">I am a Caregiver</a>
-  {% if request.user.is_staff %}
-  <a class="btn" href="{% url 'content:bulk_doctor_upload' %}" style="margin-left:10px">Bulk Doctor CSV Upload</a>
- 
-  <a class="btn" href="{% url 'content:reports_dashboard' %}" style="margin-left:10px">View Reports</a>   <!-- NEW -->
 
+{% if request.user.is_staff %}
+  <div class="card">
+    <a class="btn" href="{% url 'content:register_pediatrician' %}">I am a Pediatrician</a>
+    <a class="btn" href="{% url 'content:register_caregiver' %}" style="margin-left:10px">I am a Caregiver</a>
+    <a class="btn" href="{% url 'content:bulk_doctor_upload' %}" style="margin-left:10px">Bulk Doctor CSV Upload</a>
+    <a class="btn" href="{% url 'content:reports_dashboard' %}" style="margin-left:10px">View Reports</a>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Universal Access</h3>
+    <p class="muted">Open the global start page or download the single QR that works for every clinic.</p>
+    <div style="display:flex; gap:10px; flex-wrap:wrap">
+      <a class="btn" href="{% url 'content:universal_entry' %}" target="_blank" rel="noopener">Visit /start/</a>
+      <a class="btn" href="{% url 'content:global_qr_svg' %}?download=1">Download QR (/qr/global.svg)</a>
+    </div>
+  </div>
+{% else %}
+  <div class="card">
+    <a class="btn" href="{% url 'content:register_pediatrician' %}">I am a Pediatrician</a>
+    <a class="btn" href="{% url 'content:register_caregiver' %}" style="margin-left:10px">I am a Caregiver</a>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Universal Patient Entry</h3>
+    <p class="muted">A single link/QR that works for all clinics and patients.</p>
+    <div style="display:flex; gap:12px; flex-wrap:wrap">
+      <a class="btn" href="{% url 'content:global_start' %}" target="_blank" rel="noopener">Visit /start/</a>
+      <a class="btn" href="{% url 'content:global_qr_svg' %}?download=1">Download Global QR (SVG)</a>
+    </div>
+  </div>
 {% endif %}
-
-</div>
 
 {% endblock %}

@@ -1,0 +1,110 @@
+{% extends "content/base.html" %}
+{% block content %}
+<style>
+  /* Center the form container horizontally with padding */
+  form.card {
+    margin: 20px auto;
+    padding: 20px 24px;
+    box-sizing: border-box;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 0 10px rgb(0 0 0 / 0.1);
+  }
+
+  /* Limit max width and make width 90% on small screens */
+  @media (max-width: 600px) {
+    form.card {
+      max-width: 90vw;
+      padding: 16px 18px;
+    }
+  }
+
+  /* Default max-width for larger screens */
+  form.card {
+    max-width: 560px;
+  }
+
+  /* Inputs and labels styling */
+  label {
+    display: block;
+    margin-top: 16px;
+    font-weight: 600;
+  }
+
+  input[type="text"],
+  input[type="tel"] {
+    width: 100%;
+    padding: 10px 12px;
+    margin-top: 6px;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease-in-out;
+  }
+
+  input[type="text"]:focus,
+  input[type="tel"]:focus {
+    outline: none;
+    border-color: #22c55e; /* green */
+    box-shadow: 0 0 4px #22c55eaa;
+  }
+
+  /* Button styling */
+  button.btn-green {
+    margin-top: 24px;
+    width: 100%;
+    padding: 12px 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    background-color: #22c55e;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+  }
+
+  button.btn-green:hover {
+    background-color: #16a34a;
+  }
+
+  /* Muted text */
+  .muted {
+    color: #6b7280; /* Tailwind gray-500 */
+    font-size: 0.9rem;
+    margin-bottom: 0;
+  }
+
+  /* Smaller muted separator */
+  .muted.separator {
+    margin: 6px 0;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+</style>
+
+<h2>Start Screening</h2>
+
+{% if error %}
+  <div class="card" style="border-color:#ef4444;color:#b91c1c">{{ error }}</div>
+{% endif %}
+
+<form method="post" class="card">
+  {% csrf_token %}
+  <p class="muted">Enter either the doctor’s <strong>Unique Code</strong> or the clinic/doctor’s phone number, and your WhatsApp number.</p>
+
+  <label>Doctor Code (optional)</label>
+  <input type="text" name="doctor_code" value="{{ doctor_code_prefill }}" placeholder="e.g., A1C5C467"/>
+
+  <div class="muted separator">— OR —</div>
+
+  <label>Clinic/Doctor Number (optional)</label>
+  <input type="tel" name="clinic_number" placeholder="10-digit clinic/doctor number"/>
+
+  <label>Enter Parent's WhatsApp No.</label>
+  <input type="tel" name="parent_phone" required placeholder="10-digit mobile number"/>
+
+  <button class="btn btn-green" type="submit">Continue</button>
+</form>
+{% endblock %}
