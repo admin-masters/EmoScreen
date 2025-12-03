@@ -52,7 +52,7 @@ from .utils import (
     generate_doctor_code, normalize_phone, whatsapp_link, parent_message,
     white_label_context, generate_report_code, ADVISE_PATIENT_TEXT,
     clinic_contact_numbers, booking_message_for_clinic, notify_registration,
-    make_verify_token, read_verify_token, last10_digits,clinic_valid_last10_set   # <-- NEW imports
+    make_verify_token, read_verify_token, last10_digits,clinic_valid_last10_set,get_public_professional   # <-- NEW imports
 )
 
 # ---------- Registration ----------
@@ -353,6 +353,69 @@ def _build_screening_form(lang_code):
         })
     return fields, questions
 
+from .pdf_utils import build_patient_report_pdf_bytes  # add near the top with other imports
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, Email, To, Attachment, FileContent, FileName, FileType, Disposition
+import base64
+from datetime import datetime
+
+def _send_patient_report_email_only(submission, patient_email, patient_name, parent_phone, rf_labels, request):
+    """Send only the patient report (PDF) to the patient."""
+    if not patient_email:
+        return
+
+    patient_pdf_bytes, patient_pdf_pwd = build_patient_report_pdf_bytes(
+        patient_name=patient_name or "",
+        parent_phone=parent_phone or "",
+        report_code=submission.report_code,
+        rf_labels=rf_labels,
+    )
+
+    html = f"""
+      <div style="font-family:Arial,sans-serif">
+        <p><strong>Your EmoScreen Report</strong></p>
+        <p>Report Code: {submission.report_code}</p>
+        <p>Please note: The attached PDF is password protected.<br/>
+           <em>Password</em>: first 4 letters of your name + last 4 digits of your WhatsApp number.</p>
+        <p>This report is for your information only; please consult a qualified doctor for any concerns.</p>
+        <hr/>
+        <small>Generated on {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}</small>
+      </div>
+    """
+
+    if not settings.SENDGRID_API_KEY:
+        print("---- SENDGRID DISABLED (patient-only report) ----")
+        print("To:", patient_email)
+        print("Subject:", "Your EmoScreen Report")
+        print("Patient PDF Password:", patient_pdf_pwd)
+        return
+
+    try:
+        sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
+        msg = Mail(
+            from_email=Email(settings.DEFAULT_FROM_EMAIL, getattr(settings, "REPORT_FROM_NAME", "EmoScreen")),
+            to_emails=To(patient_email),
+            subject="Your EmoScreen Report",
+            html_content=html,
+        )
+        att = Attachment(
+            FileContent(base64.b64encode(patient_pdf_bytes).decode()),
+            FileName(f"PatientReport_{submission.report_code}.pdf"),
+            FileType("application/pdf"),
+            Disposition("attachment"),
+        )
+        try:
+            msg.add_attachment(att)
+        except AttributeError:
+            msg.attachments = [att]
+
+        resp = sg.send(msg)
+        print(f"[SendGrid] patient-only status={resp.status_code} (PDF attached).")
+        Submission.objects.filter(pk=submission.pk).update(email_sent_at=datetime.utcnow())
+    except Exception as e:
+        print("SendGrid patient-only error:", e)
+
+
 @transaction.atomic
 def screening_form(request, code, lang):
     pro = get_object_or_404(RegisteredProfessional, unique_doctor_code=code)
@@ -375,8 +438,8 @@ def screening_form(request, code, lang):
                 "lang": lang,
                 "pro": pro,
                 "ui": ui,
-                "form_title": form_title,       # Added
-                "form_purpose": form_purpose,   # Added
+                "form_title": form_title,
+                "form_purpose": form_purpose,
                 **white_label_context(pro),
             }
             return render(request, "content/screening_form.html", ctx)
@@ -393,14 +456,15 @@ def screening_form(request, code, lang):
                 "lang": lang,
                 "pro": pro,
                 "ui": ui,
-                "form_title": form_title,       # Added
-                "form_purpose": form_purpose,   # Added
+                "form_title": form_title,
+                "form_purpose": form_purpose,
                 **white_label_context(pro)
             }
             return render(request, "content/screening_form.html", ctx)
 
         selected_option_codes = [request.POST.get(f["question_code"]) for f in fields]
         options = list(Option.objects.filter(option_code__in=selected_option_codes))
+
         flags = []
         for opt in options:
             if opt.triggers_red_flag and opt.red_flag_id:
@@ -434,20 +498,49 @@ def screening_form(request, code, lang):
         # NEW (aligned)
         rf_labels, education_links = _aligned_rf_labels_and_links(flags, lang, request)
 
+        # ----------------------------------------------------
+        # NEW: PUBLIC / SELF FLOW BRANCH
+        # ----------------------------------------------------
+        public_code = getattr(settings, "PUBLIC_DOCTOR_CODE", "PUBLIC0001")
 
-        if flags_count > 0:
-            _send_doctor_report_email(
-                submission, pro, lang, rf_labels, education_links, patient_name, parent_phone, request
+        if pro.unique_doctor_code == public_code:
+            # SELF-FLOW: send ONLY to patient
+            Submission.objects.filter(pk=submission.pk).update(email_to=patient_email)
+
+            _send_patient_report_email_only(
+                submission,
+                patient_email,
+                patient_name,
+                parent_phone,
+                rf_labels,
+                request,
             )
+        else:
+            # DOCTOR FLOW (existing behavior)
+            if flags_count > 0:
+                _send_doctor_report_email(
+                    submission,
+                    pro,
+                    lang,
+                    rf_labels,
+                    education_links,
+                    patient_name,
+                    parent_phone,
+                    request,
+                )
 
-        _send_patient_report_email(
-            to_email=patient_email,
-            patient_name=patient_name,
-            parent_phone=parent_phone,
-            report_code=report_code,
-            rf_labels=rf_labels,
-            request=request,
-        )
+            # Patient email still sent in doctor flow
+            _send_patient_report_email(
+                to_email=patient_email,
+                patient_name=patient_name,
+                parent_phone=parent_phone,
+                report_code=report_code,
+                rf_labels=rf_labels,
+                request=request,
+            )
+        # ----------------------------------------------------
+        # END NEW BRANCH
+        # ----------------------------------------------------
 
         tel_digits, wa_digits = clinic_contact_numbers(pro)
         call_link = f"tel:{tel_digits}" if (flags_count > 0 and tel_digits) else ""
@@ -483,11 +576,12 @@ def screening_form(request, code, lang):
         "lang": lang,
         "pro": pro,
         "ui": ui,
-        "form_title": form_title,       # Added
-        "form_purpose": form_purpose,   # Added
+        "form_title": form_title,
+        "form_purpose": form_purpose,
         **white_label_context(pro),
     }
     return render(request, "content/screening_form.html", ctx)
+
 
 
 # content/views.py  (drop-in replacement for _send_doctor_report_email)
@@ -1443,3 +1537,35 @@ def universal_entry(request):
         "error": error,
         "doctor_code_prefill": code_prefill,
     })
+
+def self_qr_svg(request):
+    """Permanent QR that encodes /start/self/."""
+    url = request.build_absolute_uri(reverse("content:self_start"))
+    img = qrcode.make(url, image_factory=SvgImage, box_size=10, border=2)
+    buf = io.BytesIO()
+    img.save(buf)
+    resp = HttpResponse(buf.getvalue(), content_type="image/svg+xml")
+    if request.GET.get("download"):
+        resp["Content-Disposition"] = 'attachment; filename="EmoScreen_Self_QR.svg"'
+    return resp
+
+@require_http_methods(["GET", "POST"])
+def self_start(request):
+    """
+    Public patient-only entry. Patient enters ONLY their 10-digit WhatsApp number.
+    We set the same 'phone_verified_<code>' session flag your guard uses and
+    go straight to the language selection page for the SELF professional.
+    """
+    error = ""
+    if request.method == "POST":
+        msisdn = last10_digits(normalize_phone(request.POST.get("parent_phone", "")))
+        if len(msisdn) != 10:
+            error = "Please enter your 10-digit WhatsApp number."
+        else:
+            pro = get_public_professional()
+            code = pro.unique_doctor_code
+            request.session[f"phone_verified_{code}"] = True
+            request.session[f"parent_last10_{code}"] = msisdn  # optional prefill
+            return redirect(reverse("content:parent_language_select", args=[code]))
+
+    return render(request, "content/self_start.html", {"error": error})

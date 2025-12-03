@@ -250,3 +250,55 @@ def notify_registration(pro, clinic_url: str):
     # EXACTLY THREE PARAMS to match the approved template: {1} Name, {2} Link, {3} How-to Guide
     params = [doc_name, clinic_url, how_to_use]
     _aisensy_send(normalize_phone(pro.whatsapp), doc_name, params)
+
+
+# content/utils.py
+from django.conf import settings
+
+def get_public_professional():
+    """
+    One-time, idempotent creator for the 'system' professional the self/global
+    flows use to reuse the existing language/form pages. Guaranteed NOT to
+    collide on email.
+    """
+    from .models import RegisteredProfessional
+
+    code = getattr(settings, "PUBLIC_DOCTOR_CODE", "PUBLIC0001")
+
+    # Fetch by code first (idempotent)
+    pro = RegisteredProfessional.objects.filter(unique_doctor_code=code).first()
+    if pro:
+        return pro
+
+    # Base email from settings (or a safe default)
+    base = getattr(settings, "PUBLIC_PRO_EMAIL", "public@emoscreen.local")
+    local, sep, domain = base.partition("@")
+    if not domain:
+        domain = "example.invalid"  # non-routable fallback
+
+    # Ensure uniqueness by adding +selfN if needed
+    email = f"{local}@{domain}"
+    if RegisteredProfessional.objects.filter(email=email).exists():
+        i = 1
+        while True:
+            candidate = f"{local}+self{i}@{domain}"
+            if not RegisteredProfessional.objects.filter(email=candidate).exists():
+                email = candidate
+                break
+            i += 1
+
+    # Create minimal record (no outbound comms use this email)
+    return RegisteredProfessional.objects.create(
+        role=RegisteredProfessional.Role.CAREGIVER,
+        salutation="",
+        first_name=getattr(settings, "PUBLIC_BRAND_NAME", "EmoScreen"),
+        last_name="Self Screening",
+        email=email,
+        whatsapp="",
+        appointment_booking_number="",
+        clinic_address="",
+        state="",
+        district="",
+        receptionist_whatsapp="",
+        unique_doctor_code=code,
+    )

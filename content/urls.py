@@ -29,14 +29,22 @@ urlpatterns = [
 
     # Verification & terms
     path("verify/<code>/<token>/", views.verify_phone, name="verify_phone"),
-    path("verify/<code>/", views.verify_phone, name="verify_phone"),  
+    path("verify/<code>/", views.verify_phone, name="verify_phone"),
     path("terms/<code>/", views.terms_accept, name="terms_accept"),
     path("terms/", views.terms_public, name="terms_public"),
 
     # Share / QR codes
     path("share/<code>/", views.share_landing, name="share_landing"),
+
+    # --- IMPORTANT FIX: STATIC QR ROUTES MUST COME BEFORE DYNAMIC ONE ---
+    path("qr/global.svg", views.global_qr_svg, name="global_qr_svg"),
+    path("qr/self.svg", views.self_qr_svg, name="self_qr_svg"),
+
+    # Dynamic QR route (must remain LAST)
     path("qr/<code>.svg", views.doctor_qr_svg, name="doctor_qr_svg"),
+
+    # Start routes
     path("start/universal/", views.universal_entry, name="universal_entry"),
     path("start/global/", views.global_start, name="global_start"),
-    path("qr/global.svg", views.global_qr_svg, name="global_qr_svg"),
+    path("start/self/", views.self_start, name="self_start"),
 ]
