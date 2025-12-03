@@ -3,28 +3,42 @@
 <h2>{{ form_title|default:"Behavioral & Emotional Red Flags – Pre-consultation form" }}</h2>
 {% comment %} {% if form_purpose %}<p class="muted">{{ form_purpose }}</p>{% endif %} {% endcomment %}
 
-{% if error %}<div class="card" style="border-color:#ef4444;color:#b91c1c">{{ error }}</div>{% endif %}
+{% if error %}
+  <div class="card" style="border-color:#ef4444;color:#b91c1c">{{ error }}</div>
+{% endif %}
+
 <form method="post" class="card">
   {% csrf_token %}
   <h3>Patient Details</h3>
 
+  <!-- Patient Name -->
   <label>{{ ui.patient_name }}</label>
   <input type="text" name="patient_name" required />
 
+  <!-- Parent WhatsApp (supports self-flow prefilled parent) -->
   <label>{{ ui.parent_whatsapp }}</label>
-  <input type="text" name="parent_phone" required />
+  {% if prefilled_parent %}
+      <input type="hidden" name="parent_phone" value="{{ prefilled_parent }}">
+      <div class="muted">
+          Using verified WhatsApp: ******{{ prefilled_parent|slice:"-4:" }}
+      </div>
+  {% else %}
+      <input type="text" name="parent_phone" required />
+  {% endif %}
 
+  <!-- Patient Email -->
   <label>{{ ui.patient_email }}</label>
   <input type="email" name="patient_email" required />
 
+  <!-- DOB -->
   <label>{{ ui.dob_label }}</label>
   <input type="date" name="dob" required />
   <div class="muted">{{ ui.dob_hint }}</div>
 
+  <!-- Gender -->
   <label>{{ ui.gender }}</label>
   <select name="gender" required>
     <option value="">{{ ui.gender }}</option>
-    <!-- keep values stable; localize only the visible text -->
     <option value="Male">{{ ui.gender_male }}</option>
     <option value="Female">{{ ui.gender_female }}</option>
     <option value="Other">{{ ui.gender_other }}</option>
@@ -35,7 +49,10 @@
     <div class="q">
       <div><strong>{{ forloop.counter }}. {{ f.question_text }}</strong></div>
       {% for o in f.options %}
-        <label><input type="radio" name="{{ f.question_code }}" value="{{ o.code }}" required> {{ o.text }}</label>
+        <label>
+          <input type="radio" name="{{ f.question_code }}" value="{{ o.code }}" required>
+          {{ o.text }}
+        </label>
       {% endfor %}
     </div>
   {% endfor %}

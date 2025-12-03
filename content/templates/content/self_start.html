@@ -1,0 +1,83 @@
+{% extends "content/base.html" %}
+{% block content %}
+
+<style>
+  /* Center wrapper */
+  .self-wrapper {
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+      width: 100%;
+  }
+
+  /* Responsive card container */
+  .self-card {
+      width: 100%;
+      max-width: 480px;     /* better on mobile */
+      padding: 24px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      background: #fff;
+  }
+
+  h2 {
+      text-align: center;
+      margin-bottom: 10px;
+  }
+
+  label {
+      display: block;
+      font-weight: 600;
+      margin-top: 16px;
+  }
+
+  input[type="tel"] {
+      width: 100%;
+      padding: 10px;
+      margin-top: 4px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 16px;
+  }
+
+  .btn-green {
+      width: 100%;
+      margin-top: 20px;
+  }
+
+  /* Mobile tweaks */
+  @media (max-width: 480px) {
+      .self-card {
+          padding: 16px;
+      }
+      input[type="tel"] {
+          font-size: 15px;
+      }
+  }
+</style>
+
+
+<h2>Start Screening (Self)</h2>
+
+{% if error %}
+  <div class="card" style="border-color:#ef4444;color:#b91c1c; max-width:480px; margin:0 auto 16px;">
+      {{ error }}
+  </div>
+{% endif %}
+
+<div class="self-wrapper">
+  <form method="post" class="self-card">
+    {% csrf_token %}
+
+    <p class="muted" style="margin-bottom: 16px;">
+      Enter your WhatsApp number to begin.
+    </p>
+
+    <label>Enter Parent's WhatsApp No.</label>
+    <input type="tel" name="parent_phone" required placeholder="10-digit WhatsApp number" />
+
+    <button class="btn btn-green" type="submit">Continue</button>
+  </form>
+</div>
+
+{% endblock %}

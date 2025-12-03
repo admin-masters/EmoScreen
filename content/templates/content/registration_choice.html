@@ -33,6 +33,20 @@
       <a class="btn" href="{% url 'content:global_qr_svg' %}?download=1">Download Global QR (SVG)</a>
     </div>
   </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>Self Screening (No Doctor)</h3>
+    <p class="muted">A single link/QR patients can use without a clinic.</p>
+    <div style="display:flex; gap:12px; flex-wrap:wrap">
+      <a class="btn" href="{% url 'content:self_start' %}" target="_blank" rel="noopener">
+        Visit /start/self/
+      </a>
+      <a class="btn" href="{% url 'content:self_qr_svg' %}?download=1">
+        Download QR (Self)
+      </a>
+    </div>
+  </div>
+  
 {% endif %}
 
 {% endblock %}
