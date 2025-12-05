@@ -6,17 +6,31 @@
     <p>{{ no_flags_msg }}</p>
   {% else %}
     <div class="card">
-      <!-- REPLACE the four lines below -->
-      <p><strong>{{ result_intro }}</strong></p>
-      <p>{{ result_capture }}</p>
-      <p>{{ result_emailed }}</p>
-      <p>{{ result_visit }}</p>
+
+      {# --- TOP NOTICE (only for Self Screen) --- #}
+      {% if is_self_screen and flags_count > 0 %}
+        <p><strong>Please capture this screen and show it to your doctor.</strong></p>
+      {% endif %}
+
+      {# --- MAIN MESSAGE --- #}
+      <p><strong>Based on your answers, the following warning signs are noticed in the child.</strong></p>
+
+      {# The "emailed to doctor" line must NOT appear for Self Screen #}
+      {% if not is_self_screen %}
+        <p>Your report has also been emailed to Dr. {{ pro_name }}.</p>
+      {% endif %}
 
       <ul>
         {% for lbl in rf_labels %}
           <li>{{ lbl }}</li>
         {% endfor %}
       </ul>
+
+      {# --- BOTTOM NOTICE (only for Self Screen) --- #}
+      {% if is_self_screen %}
+        <p style="margin-top:12px"><strong>Please visit your doctor immediately if you have not already visited recently for this condition.</strong></p>
+      {% endif %}
+
     </div>
 
     <!-- Patient CTAs unchanged -->
