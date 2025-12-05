@@ -552,7 +552,11 @@ def screening_form(request, code, lang):
         result_capture = ui["result_capture_screen"].format(doctor=doctor_name)
         result_emailed = ui["result_emailed_to_doctor"].format(doctor=doctor_name)
         result_visit = ui["result_visit_immediately"].format(doctor=doctor_name)
-
+        is_self_screen = False
+        try:
+            is_self_screen = (pro and pro.unique_doctor_code == getattr(settings, "PUBLIC_DOCTOR_CODE", "PUBLIC0001"))
+        except Exception:
+            is_self_screen = False
         ctx = {
             "report_code": report_code,
             "flags_count": flags_count,
@@ -566,6 +570,7 @@ def screening_form(request, code, lang):
             "result_capture": result_capture,
             "result_emailed": result_emailed,
             "result_visit": result_visit,
+            "is_self_screen": is_self_screen,
             **white_label_context(pro),
         }
         return render(request, "content/result.html", ctx)
