@@ -52,6 +52,15 @@ pip install -r requirements.txt
 echo "🗄 Running migrations"
 python manage.py migrate --noinput --fake-initial
 
+if [ "${DEPLOY_ENV}" = "staging" ]; then
+  if [ -f "emoscreen_config_schema.xlsx" ]; then
+    echo "🌱 Seeding paid form configuration"
+    python manage.py ingest_paid_emoscreen_config emoscreen_config_schema.xlsx
+  else
+    echo "⚠️ Paid form workbook missing; skipping paid config seed"
+  fi
+fi
+
 echo "🎨 Collecting static files"
 python manage.py collectstatic --noinput
 

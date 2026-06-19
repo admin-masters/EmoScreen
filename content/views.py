@@ -503,10 +503,53 @@ from sendgrid.helpers.mail import Mail, Email, To, Attachment, FileContent, File
 import base64
 from datetime import datetime
 
+
+SIMULATED_EMAIL_BACKENDS = {
+    "django.core.mail.backends.console.EmailBackend",
+    "django.core.mail.backends.locmem.EmailBackend",
+    "django.core.mail.backends.filebased.EmailBackend",
+    "django.core.mail.backends.dummy.EmailBackend",
+}
+
+
+def _smtp_send_report_email(to_email, subject, html, attachments):
+    backend_path = getattr(settings, "EMAIL_BACKEND", "")
+    if backend_path in SIMULATED_EMAIL_BACKENDS:
+        print(f"[Email] EMAIL_BACKEND={backend_path} does not deliver externally; report email not sent.")
+        return False
+
+    try:
+        from django.core.mail import EmailMultiAlternatives
+
+        from_email = (
+            getattr(settings, "DEFAULT_FROM_EMAIL", "")
+            or getattr(settings, "SERVER_EMAIL", "")
+            or "no-reply@emoscreen.local"
+        )
+        message = EmailMultiAlternatives(
+            subject=subject,
+            body="Please see attached report.",
+            from_email=from_email,
+            to=[to_email],
+        )
+        message.attach_alternative(html, "text/html")
+        for filename, payload in attachments:
+            message.attach(filename=filename, content=payload, mimetype="application/pdf")
+        sent = message.send(fail_silently=False)
+        if sent:
+            print(f"[Email] SMTP/backend report email sent to {to_email}")
+            return True
+        print(f"[Email] SMTP/backend returned sent=0 for {to_email}")
+        return False
+    except Exception as exc:
+        print("[Email] SMTP/backend report email error:", exc)
+        return False
+
+
 def _send_patient_report_email_only(submission, patient_email, patient_name, parent_phone, rf_labels, request):
     """Send only the patient report (PDF) to the patient."""
     if not patient_email:
-        return
+        return False
 
     patient_pdf_bytes, patient_pdf_pwd = build_patient_report_pdf_bytes(
         patient_name=patient_name or "",
@@ -527,19 +570,19 @@ def _send_patient_report_email_only(submission, patient_email, patient_name, par
       </div>
     """
 
+    subject = "Your EmoScreen Report"
+    attachments = [(f"PatientReport_{submission.report_code}.pdf", patient_pdf_bytes)]
+
     if not settings.SENDGRID_API_KEY:
-        print("---- SENDGRID DISABLED (patient-only report) ----")
-        print("To:", patient_email)
-        print("Subject:", "Your EmoScreen Report")
-        print("Patient PDF Password:", patient_pdf_pwd)
-        return
+        print("[SendGrid] missing SENDGRID_API_KEY; trying configured Django email backend for patient-only report.")
+        return _smtp_send_report_email(patient_email, subject, html, attachments)
 
     try:
         sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
         msg = Mail(
             from_email=Email(settings.DEFAULT_FROM_EMAIL, getattr(settings, "REPORT_FROM_NAME", "EmoScreen")),
             to_emails=To(patient_email),
-            subject="Your EmoScreen Report",
+            subject=subject,
             html_content=html,
         )
         att = Attachment(
@@ -555,9 +598,14 @@ def _send_patient_report_email_only(submission, patient_email, patient_name, par
 
         resp = sg.send(msg)
         print(f"[SendGrid] patient-only status={resp.status_code} (PDF attached).")
-        Submission.objects.filter(pk=submission.pk).update(email_sent_at=datetime.utcnow())
+        if 200 <= resp.status_code < 300:
+            Submission.objects.filter(pk=submission.pk).update(email_sent_at=timezone.now())
+            return True
+        print("[SendGrid] patient-only non-success; trying configured Django email backend.")
+        return _smtp_send_report_email(patient_email, subject, html, attachments)
     except Exception as e:
         print("SendGrid patient-only error:", e)
+        return _smtp_send_report_email(patient_email, subject, html, attachments)
 
 
 @transaction.atomic
@@ -687,12 +735,14 @@ def screening_form(request, code, lang):
         # NEW: PUBLIC / SELF FLOW BRANCH
         # ----------------------------------------------------
         public_code = getattr(settings, "PUBLIC_DOCTOR_CODE", "PUBLIC0001")
+        patient_email_sent = False
+        doctor_email_sent = False
 
         if pro.unique_doctor_code == public_code:
             # SELF-FLOW: send ONLY to patient
             Submission.objects.filter(pk=submission.pk).update(email_to=patient_email)
 
-            _send_patient_report_email_only(
+            patient_email_sent = _send_patient_report_email_only(
                 submission,
                 patient_email,
                 patient_name,
@@ -703,7 +753,7 @@ def screening_form(request, code, lang):
         else:
             # DOCTOR FLOW (existing behavior)
             if flags_count > 0:
-                _send_doctor_report_email(
+                doctor_email_sent = _send_doctor_report_email(
                     submission,
                     pro,
                     lang,
@@ -715,7 +765,7 @@ def screening_form(request, code, lang):
                 )
 
             # Patient email still sent in doctor flow
-            _send_patient_report_email(
+            patient_email_sent = _send_patient_report_email(
                 to_email=patient_email,
                 patient_name=patient_name,
                 parent_phone=parent_phone,
@@ -735,20 +785,22 @@ def screening_form(request, code, lang):
                     patient_name=patient_name,
                     patient_email=patient_email,
                 )
-                audit.mark_report_sent(
-                    workflow_case,
-                    to_patient=True,
-                    to_doctor=(pro.unique_doctor_code != public_code and flags_count > 0),
-                    patient_status="SENT" if settings.SENDGRID_API_KEY else "SIMULATED",
-                    doctor_status="SENT" if settings.SENDGRID_API_KEY else "SIMULATED",
-                )
+                if patient_email_sent or doctor_email_sent:
+                    audit.mark_report_sent(
+                        workflow_case,
+                        to_patient=patient_email_sent,
+                        to_doctor=doctor_email_sent,
+                        patient_status="SENT" if patient_email_sent else "FAILED",
+                        doctor_status="SENT" if doctor_email_sent else "FAILED",
+                    )
                 audit.record_delivery(
                     workflow_case,
                     channel="EMAIL",
                     recipient=patient_email,
                     subject="Your EmoScreen Report",
-                    status="SENT" if settings.SENDGRID_API_KEY else "SIMULATED",
-                    provider="sendgrid" if settings.SENDGRID_API_KEY else "local-email-backend",
+                    status="SENT" if patient_email_sent else "FAILED",
+                    provider="sendgrid" if settings.SENDGRID_API_KEY else "django-email-backend",
+                    error_text="" if patient_email_sent else "Report email was not delivered. Check SENDGRID_API_KEY or SMTP EMAIL_* settings.",
                     metadata={"email_type": "LEGACY_PATIENT_REPORT", "report_code": report_code},
                 )
                 if pro.unique_doctor_code != public_code and flags_count > 0:
@@ -757,8 +809,9 @@ def screening_form(request, code, lang):
                         channel="EMAIL",
                         recipient=pro.email,
                         subject=f"Red Flags report for {patient_name or 'patient'}",
-                        status="SENT" if settings.SENDGRID_API_KEY else "SIMULATED",
-                        provider="sendgrid" if settings.SENDGRID_API_KEY else "local-email-backend",
+                        status="SENT" if doctor_email_sent else "FAILED",
+                        provider="sendgrid" if settings.SENDGRID_API_KEY else "django-email-backend",
+                        error_text="" if doctor_email_sent else "Doctor report email was not delivered. Check SENDGRID_API_KEY or SMTP EMAIL_* settings.",
                         metadata={"email_type": "LEGACY_DOCTOR_REPORT", "report_code": report_code},
                     )
         except Exception as exc:
@@ -908,20 +961,21 @@ def _send_doctor_report_email(submission, pro, lang, rf_labels, education_links,
         report_code=submission.report_code,
         rf_labels=rf_labels,
     )
+    subject = f"Red Flags report for {patient_name or 'patient'}"
+    attachments = [
+        (f"DoctorReport_{submission.report_code}.pdf", doctor_pdf_bytes),
+        (f"PatientReport_{submission.report_code}.pdf", patient_pdf_bytes),
+    ]
     if not settings.SENDGRID_API_KEY:
-        print("---- SENDGRID DISABLED: printing doctor report email ----")
-        print("To:", pro.email)
-        print("Subject:", f"Red Flags report for {patient_name or 'patient'}")
-        print("Doctor PDF Password:", doctor_pdf_pwd)
-        print("Patient PDF Password:", patient_pdf_pwd)
-        return
+        print("[SendGrid] missing SENDGRID_API_KEY; trying configured Django email backend for doctor report.")
+        return _smtp_send_report_email(pro.email, subject, html, attachments)
 
     try:
         sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
         msg = Mail(
             from_email=Email(settings.DEFAULT_FROM_EMAIL, settings.REPORT_FROM_NAME),
             to_emails=To(pro.email),
-            subject=f"Red Flags report for {patient_name or 'patient'}",
+            subject=subject,
             html_content=html,
         )
         att1 = Attachment(
@@ -945,9 +999,14 @@ def _send_doctor_report_email(submission, pro, lang, rf_labels, education_links,
         resp = sg.send(msg)
         print(f"[SendGrid] status={resp.status_code} (PDFs attached). DoctorPDFPwd={doctor_pdf_pwd} PatientPDFPwd={patient_pdf_pwd}")
         from .models import Submission
-        Submission.objects.filter(pk=submission.pk).update(email_sent_at=datetime.utcnow())
+        if 200 <= resp.status_code < 300:
+            Submission.objects.filter(pk=submission.pk).update(email_sent_at=timezone.now())
+            return True
+        print("[SendGrid] doctor report non-success; trying configured Django email backend.")
+        return _smtp_send_report_email(pro.email, subject, html, attachments)
     except Exception as e:
         print("SendGrid error:", e)
+        return _smtp_send_report_email(pro.email, subject, html, attachments)
 
 def _send_patient_report_email(to_email: str, patient_name: str, parent_phone: str,
                                report_code: str, rf_labels, request):
@@ -989,20 +1048,19 @@ def _send_patient_report_email(to_email: str, patient_name: str, parent_phone: s
     </div>
     """
 
+    subject = f"Your Emoscreen report ({report_code})"
+    attachments = [(f"YourReport_{report_code}.pdf", pdf_bytes)]
+
     if not settings.SENDGRID_API_KEY:
-        # Dev mode: no email credentials present
-        print("[SendGrid] missing SENDGRID_API_KEY; printing PATIENT email instead")
-        print("To:", to_email)
-        print("Subject:", f"Your Emoscreen report ({report_code})")
-        print("HTML:\n", html)
-        return
+        print("[SendGrid] missing SENDGRID_API_KEY; trying configured Django email backend for patient report.")
+        return _smtp_send_report_email(to_email, subject, html, attachments)
 
     try:
         sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
         msg = Mail(
             from_email=Email(settings.DEFAULT_FROM_EMAIL, settings.REPORT_FROM_NAME),
             to_emails=To(to_email),
-            subject=f"Your Emoscreen report ({report_code})",
+            subject=subject,
             html_content=html,
         )
         att = Attachment(
@@ -1018,8 +1076,13 @@ def _send_patient_report_email(to_email: str, patient_name: str, parent_phone: s
 
         resp = sg.send(msg)
         print(f"[SendGrid] patient status={resp.status_code} (patient PDF attached).")
+        if 200 <= resp.status_code < 300:
+            return True
+        print("[SendGrid] patient report non-success; trying configured Django email backend.")
+        return _smtp_send_report_email(to_email, subject, html, attachments)
     except Exception as e:
         print("[SendGrid] patient email error:", e)
+        return _smtp_send_report_email(to_email, subject, html, attachments)
 
 
 
