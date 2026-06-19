@@ -21,6 +21,12 @@ from paid.models import (
     EsSubScaleScore,
 )
 
+BRAND_LOGO_FILENAME = "logo_eq_final.jpeg"
+BRAND_GREEN = colors.HexColor("#4caf50")
+BRAND_BLUE = colors.HexColor("#0b2a4d")
+TABLE_BORDER = colors.HexColor("#d6d6d6")
+FOOTER_BG = colors.HexColor("#f3f3f3")
+
 
 def build_pdf_password(prefix_source: str, phone: str) -> str:
     source = (prefix_source or "").strip()
@@ -56,7 +62,11 @@ def _age_text(dob, assessment_date):
         months -= 1
     years = max(0, months // 12)
     rem = max(0, months % 12)
-    return f"{years}y {rem}m"
+    if years and rem:
+        return f"{years} years {rem} months"
+    if years:
+        return f"{years} years"
+    return f"{rem} months"
 
 
 def _question_rows(submission):
@@ -65,14 +75,14 @@ def _question_rows(submission):
     options = {o.option_code: o for o in EsCfgOption.objects.all()}
 
     rows = []
-    for idx, q in enumerate(question_qs, start=1):
+    for q in question_qs:
         ans = answers.get(q.question_code)
         if not ans:
             continue
         raw = str(ans.value_json)
         opt = options.get(raw)
         label = opt.label if opt else raw
-        rows.append((idx, q.question_text, label))
+        rows.append((len(rows) + 1, q.question_text, label))
     return rows
 
 
@@ -172,16 +182,14 @@ def _resolve_logo_path(logo_value: str) -> str | None:
 
 def _draw_page_footer(canvas, doc, template: EsCfgReportTemplate | None):
     canvas.saveState()
-    page_width, _ = A4
-    left_x = 0
-    right_x = page_width
-    text_left = 8 * mm
-    text_right = page_width - 8 * mm
-    base_y = 6 * mm
+    page_width, _page_height = A4
+    text_left = 6 * mm
+    text_right = page_width - 6 * mm
+    footer_height = 22 * mm
+    base_y = 4 * mm
 
-    canvas.setStrokeColor(colors.HexColor("#d1d5db"))
-    canvas.setLineWidth(0.6)
-    canvas.line(left_x, base_y + 12 * mm, right_x, base_y + 12 * mm)
+    canvas.setFillColor(FOOTER_BG)
+    canvas.rect(0, 0, page_width, footer_height, stroke=0, fill=1)
 
     company = (template.footer_company if template else "") or "EQUIPOISE Learning Private Limited"
     tagline = (template.footer_tagline if template else "") or (
@@ -190,17 +198,21 @@ def _draw_page_footer(canvas, doc, template: EsCfgReportTemplate | None):
     phone = (template.footer_phone if template else "") or "+91 9004806077"
     email = (template.footer_email if template else "") or "equip2006@gmail.com"
 
-    canvas.setFont("Helvetica-Bold", 10)
-    canvas.drawString(text_left, base_y + 8 * mm, company)
-    canvas.setFont("Helvetica", 8.8)
+    canvas.setFillColor(colors.black)
+    canvas.setFont("Times-Bold", 12)
+    canvas.drawString(text_left, base_y + 12 * mm, company)
+    canvas.setFont("Times-Roman", 11)
     for idx, line in enumerate(str(tagline).splitlines()):
-        canvas.drawString(text_left, base_y + (4 - idx * 3.8) * mm, line)
+        canvas.drawString(text_left, base_y + (7 - idx * 4.4) * mm, line)
 
-    canvas.setFont("Helvetica-Bold", 10)
-    canvas.drawRightString(text_right, base_y + 8 * mm, "Contact us")
-    canvas.setFont("Helvetica", 8.8)
-    canvas.drawRightString(text_right, base_y + 4 * mm, str(phone))
-    canvas.drawRightString(text_right, base_y + 0.2 * mm, str(email))
+    canvas.setFont("Times-Bold", 12)
+    canvas.drawRightString(text_right, base_y + 12 * mm, "Contact us")
+    canvas.setFont("Times-Roman", 11)
+    canvas.drawRightString(text_right, base_y + 7 * mm, str(phone))
+    canvas.drawRightString(text_right, base_y + 2.5 * mm, str(email))
+    email_width = canvas.stringWidth(str(email), "Times-Roman", 11)
+    canvas.setLineWidth(0.4)
+    canvas.line(text_right - email_width, base_y + 1.8 * mm, text_right, base_y + 1.8 * mm)
 
     canvas.restoreState()
 
@@ -208,45 +220,46 @@ def _draw_page_footer(canvas, doc, template: EsCfgReportTemplate | None):
 def _draw_page_header(canvas, doc, template: EsCfgReportTemplate | None, submission, report_type: str):
     canvas.saveState()
     page_width, page_height = A4
-    left_x = 0
-    right_x = page_width
     text_left = 8 * mm
-    top_y = page_height - 12 * mm
+    top_y = page_height - 10 * mm
 
     title = "Doctor Report for EmoScreen" if report_type == "doctor" else "Patient Report for EmoScreen"
-    canvas.setFont("Helvetica-Bold", 17)
+    canvas.setFillColor(colors.black)
+    canvas.setFont("Times-Bold", 19)
     canvas.drawString(text_left, top_y, title)
 
-    logo_path = _resolve_logo_path(template.header_logo_path if template else "")
-    logo_y = top_y - 12 * mm
+    logo_value = (template.header_logo_path if template else "") or BRAND_LOGO_FILENAME
+    logo_path = _resolve_logo_path(logo_value)
+    if not logo_path and logo_value != BRAND_LOGO_FILENAME:
+        logo_path = _resolve_logo_path(BRAND_LOGO_FILENAME)
+    logo_y = top_y - 17 * mm
     if logo_path:
         canvas.drawImage(
             logo_path,
             text_left,
-
             logo_y,
-            width=95 * mm,
-            height=12 * mm,
+            width=112 * mm,
+            height=13 * mm,
             preserveAspectRatio=True,
             mask="auto",
         )
 
     header_left, header_right = _header_band(submission)
-    band_top = logo_y - 3 * mm
-    band_height = 16 * mm
-    canvas.setFillColor(colors.HexColor("#4caf50"))
-    canvas.rect(left_x, band_top - band_height, right_x - left_x, band_height, stroke=0, fill=1)
+    band_top = logo_y - 6 * mm
+    band_height = 30 * mm
+    canvas.setFillColor(BRAND_GREEN)
+    canvas.rect(0, band_top - band_height, page_width, band_height, stroke=0, fill=1)
 
     clean_left = re.sub(r"<br\s*/?>", "\n", header_left)
     lines = [line for line in clean_left.splitlines() if line.strip()]
     canvas.setFillColor(colors.white)
-    canvas.setFont("Helvetica", 8.5)
-    text_y = band_top - 3.6 * mm
+    canvas.setFont("Times-Roman", 12)
+    text_y = band_top - 6 * mm
     for line in lines:
-        canvas.drawString(text_left + 1 * mm, text_y, line.strip())
-        text_y -= 3.4 * mm
+        canvas.drawString(text_left, text_y, line.strip())
+        text_y -= 5 * mm
 
-    canvas.drawRightString(right_x - 8 * mm, band_top - 3.6 * mm, re.sub(r"<[^>]*>", "", header_right))
+    canvas.drawRightString(page_width - 8 * mm, band_top - 6 * mm, re.sub(r"<[^>]*>", "", header_right))
 
     canvas.restoreState()
 
@@ -254,26 +267,33 @@ def _draw_page_header(canvas, doc, template: EsCfgReportTemplate | None, submiss
 def _build_pdf(report_type: str, submission) -> bytes:
     template = _report_template(submission.form, report_type)
     styles = getSampleStyleSheet()
-    h_style = ParagraphStyle("h", parent=styles["Heading2"], fontSize=12, textColor=colors.HexColor("#0b2a4d"), spaceBefore=10, spaceAfter=6)
-    body = ParagraphStyle("body", parent=styles["BodyText"], fontName="Helvetica", fontSize=10.5, leading=14)
+    h_style = ParagraphStyle("h", parent=styles["Heading2"], fontName="Times-Bold", fontSize=13, textColor=BRAND_BLUE, spaceBefore=10, spaceAfter=8)
+    body = ParagraphStyle("body", parent=styles["BodyText"], fontName="Times-Roman", fontSize=12, leading=16)
     table_cell = ParagraphStyle(
         "table_cell",
         parent=body,
-        fontName="Helvetica",
-        fontSize=10,
-        leading=13,
+        fontName="Times-Roman",
+        fontSize=11.5,
+        leading=14,
         wordWrap="LTR",
     )
     table_cell_bold = ParagraphStyle(
         "table_cell_bold",
         parent=table_cell,
-        fontName="Helvetica-Bold",
+        fontName="Times-Bold",
         textColor=colors.white,
+        alignment=1,
     )
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm, topMargin=54 * mm, bottomMargin=24 * mm)
-    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm, topMargin=54 * mm, bottomMargin=24 * mm)
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=24 * mm,
+        rightMargin=24 * mm,
+        topMargin=72 * mm,
+        bottomMargin=30 * mm,
+    )
 
     story = []
     story.append(Spacer(1, 1))
@@ -289,33 +309,37 @@ def _build_pdf(report_type: str, submission) -> bytes:
     story.append(Spacer(1, 8))
 
     story.append(Paragraph("Responses", h_style))
-    response_rows = [[
-        Paragraph("Question", table_cell_bold),
-        Paragraph("Response", table_cell_bold),
-    ]]
-    for _, q, a in _question_rows(submission):
+    response_rows = [
+        [
+            Paragraph("Sr.", table_cell_bold),
+            Paragraph("Question", table_cell_bold),
+            Paragraph("Response", table_cell_bold),
+        ]
+    ]
+    for idx, q, a in _question_rows(submission):
         response_rows.append([
+            Paragraph(str(idx), table_cell),
             Paragraph(str(q), table_cell),
             Paragraph(str(a), table_cell),
         ])
 
-    rt = Table(response_rows, colWidths=[118 * mm, 54 * mm], repeatRows=1)
+    rt = Table(response_rows, colWidths=[12 * mm, 98 * mm, 52 * mm], repeatRows=1, hAlign="CENTER")
     rt.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2f855a")),
+        ("BACKGROUND", (0, 0), (-1, 0), BRAND_GREEN),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d1d5db")),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("FONTNAME", (0, 0), (-1, 0), "Times-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.35, TABLE_BORDER),
+        ("FONTSIZE", (0, 0), (-1, -1), 11.5),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#bfc7cd")),
+        ("ALIGN", (0, 1), (0, -1), "CENTER"),
     ]))
     for row_idx in range(1, len(response_rows)):
         if row_idx % 2 == 0:
-            rt.setStyle(TableStyle([("BACKGROUND", (0, row_idx), (-1, row_idx), colors.HexColor("#f4f4f4"))]))
+            rt.setStyle(TableStyle([("BACKGROUND", (0, row_idx), (-1, row_idx), colors.HexColor("#efefef"))]))
     story.append(rt)
 
     if report_type == "doctor":
@@ -338,13 +362,13 @@ def _build_pdf(report_type: str, submission) -> bytes:
             ])
         if len(risk_rows) > 1:
             story.append(Paragraph("The results fall into moderate to high risk for the following disorders:", body))
-            risk_table = Table(risk_rows, colWidths=[70 * mm, 40 * mm, 40 * mm], repeatRows=1)
+            risk_table = Table(risk_rows, colWidths=[72 * mm, 42 * mm, 42 * mm], repeatRows=1, hAlign="CENTER")
             risk_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2f855a")),
+                ("BACKGROUND", (0, 0), (-1, 0), BRAND_GREEN),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#d1d5db")),
-                ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+                ("FONTNAME", (0, 0), (-1, 0), "Times-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.35, TABLE_BORDER),
+                ("FONTSIZE", (0, 0), (-1, -1), 11),
                 ("LEFTPADDING", (0, 0), (-1, -1), 6),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 6),
                 ("TOPPADDING", (0, 0), (-1, -1), 5),
