@@ -62,13 +62,68 @@ def _clinic_link_path(code: str) -> str:
     return f"/admin/bulk-upload/clinic/{code}/"
 
 
-def _completed_legacy_redirect(workflow_case):
-    """Prevent a verified free/self screening case from creating a second submission."""
+def _completed_legacy_response(request, workflow_case):
+    """Show the patient-facing result again when a completed free link is reopened."""
     if workflow_case and getattr(workflow_case, "legacy_submission_id", None):
-        return redirect(
-            reverse("content:view_result", args=[workflow_case.legacy_submission.report_code])
-        )
+        return _legacy_patient_result_response(request, workflow_case)
     return None
+
+
+def _legacy_patient_result_response(request, workflow_case):
+    submission = workflow_case.legacy_submission
+    pro = submission.professional
+    lang = submission.lang_id or workflow_case.language or "en"
+    rf_ids = list(
+        SubmissionRedFlag.objects
+        .filter(submission=submission)
+        .order_by("id")
+        .values_list("red_flag_id", flat=True)
+    )
+    rf_labels, _education_links = _aligned_rf_labels_and_links(rf_ids, lang, request)
+    flags_count = submission.flags_count if submission.flags_count is not None else len(rf_ids)
+
+    no_flags_msg = result_message_text("NO_FLAGS", lang, "No red flags were identified at this time.")
+    has_flags_intro = result_message_text("HAS_FLAGS_INTRO", lang, "")
+    self_capture_notice_top = result_message_text("SELF_CAPTURE_NOTICE_TOP", lang, "")
+    self_visit_doctor_notice_bottom = result_message_text("SELF_VISIT_DOCTOR_NOTICE_BOTTOM", lang, "")
+    doctor_email_notice = result_message_text("DOCTOR_EMAIL_NOTICE", lang, "")
+    result_title = ui_text("RESULT_TITLE", lang, "Your Report")
+    call_to_book_label = ui_text("CALL_TO_BOOK", lang, "CALL TO BOOK DOCTOR APPOINTMENT")
+    send_message_to_book_label = ui_text("SEND_MESSAGE_TO_BOOK", lang, "SEND MESSAGE TO BOOK DOCTOR APPOINTMENT")
+
+    doctor_name = " ".join(filter(None, [pro.first_name, pro.last_name])).strip()
+    doctor_name = re.sub(r"^(dr\.?|doctor)\s*", "", doctor_name, flags=re.I).strip()
+    doctor_email_notice = _interp_doctor_name(doctor_email_notice, doctor_name)
+
+    patient_name = workflow_case.patient_name or "patient"
+    tel_digits, wa_digits = clinic_contact_numbers(pro)
+    call_link = f"tel:{tel_digits}" if (flags_count > 0 and tel_digits) else ""
+    wa_msg = booking_message_for_clinic(patient_name)
+    wa_link = whatsapp_link(wa_digits, wa_msg) if (flags_count > 0 and wa_digits) else ""
+
+    public_code = getattr(settings, "PUBLIC_DOCTOR_CODE", "PUBLIC0001")
+    is_self_screen = bool(pro and pro.unique_doctor_code == public_code)
+    ctx = {
+        "report_code": submission.report_code,
+        "flags_count": flags_count,
+        "no_flags_msg": no_flags_msg,
+        "has_flags_intro": has_flags_intro,
+        "self_capture_notice_top": self_capture_notice_top,
+        "self_visit_doctor_notice_bottom": self_visit_doctor_notice_bottom,
+        "doctor_email_notice": doctor_email_notice,
+        "doctor_name": doctor_name,
+        "result_title": result_title,
+        "call_to_book_label": call_to_book_label,
+        "send_message_to_book_label": send_message_to_book_label,
+        "rf_labels": rf_labels,
+        "call_link": call_link,
+        "wa_link": wa_link,
+        "pro": pro,
+        "is_self_screen": is_self_screen,
+        **JOURNEY_LOCKED_CONTEXT,
+        **white_label_context(pro),
+    }
+    return render(request, "content/result.html", ctx)
 
 # ---------- Registration ----------
 
@@ -426,7 +481,7 @@ def verify_phone(request, code, token):
         }
         return render(request, "content/verify_phone.html", ctx)
 
-    completed_response = _completed_legacy_redirect(workflow_case)
+    completed_response = _completed_legacy_response(request, workflow_case)
     if completed_response:
         return completed_response
 
@@ -472,7 +527,7 @@ def parent_language_select(request, code):
 
     try:
         from paid.services import audit
-        completed_response = _completed_legacy_redirect(audit.get_session_case(request, code))
+        completed_response = _completed_legacy_response(request, audit.get_session_case(request, code))
         if completed_response:
             return completed_response
     except Exception as exc:
@@ -631,7 +686,7 @@ def screening_form(request, code, lang):
     except Exception as exc:
         print("Workflow audit error (screen open):", exc)
 
-    completed_response = _completed_legacy_redirect(workflow_case)
+    completed_response = _completed_legacy_response(request, workflow_case)
     if completed_response:
         return completed_response
 

@@ -598,17 +598,42 @@ def mark_report_sent(case: WorkflowCase | None, *, to_patient=False, to_doctor=F
         return None
     now = timezone.now()
     report_track, _ = WorkflowReport.objects.get_or_create(case=case)
+    successful_statuses = {
+        WorkflowDeliveryAttempt.Status.SENT,
+        WorkflowDeliveryAttempt.Status.QUEUED,
+        WorkflowDeliveryAttempt.Status.DELIVERED,
+        WorkflowDeliveryAttempt.Status.OPENED,
+        WorkflowDeliveryAttempt.Status.SIMULATED,
+    }
+    patient_success = bool(to_patient and patient_status in successful_statuses)
+    doctor_success = bool(to_doctor and doctor_status in successful_statuses)
     if to_patient:
-        report_track.sent_to_patient_at = report_track.sent_to_patient_at or now
+        if patient_success:
+            report_track.sent_to_patient_at = report_track.sent_to_patient_at or now
         report_track.patient_delivery_status = patient_status or report_track.patient_delivery_status
     if to_doctor:
-        report_track.sent_to_doctor_at = report_track.sent_to_doctor_at or now
+        if doctor_success:
+            report_track.sent_to_doctor_at = report_track.sent_to_doctor_at or now
         report_track.doctor_delivery_status = doctor_status or report_track.doctor_delivery_status
-    report_track.status = WorkflowReport.Status.SENT
+    if patient_success or doctor_success:
+        report_track.status = WorkflowReport.Status.SENT
+    elif to_patient or to_doctor:
+        report_track.status = WorkflowReport.Status.FAILED
+        report_track.error_text = "Report email delivery failed."
     report_track.save()
-    transition(case, WorkflowCase.Status.REPORT_SENT, "REPORT_SENT", stage="REPORT_DELIVERY", metadata={"to_patient": to_patient, "to_doctor": to_doctor})
-    if to_patient or to_doctor:
+    if patient_success or doctor_success:
+        transition(case, WorkflowCase.Status.REPORT_SENT, "REPORT_SENT", stage="REPORT_DELIVERY", metadata={"to_patient": to_patient, "to_doctor": to_doctor})
         transition(case, WorkflowCase.Status.COMPLETED, "WORKFLOW_COMPLETED", stage="COMPLETION")
+    elif to_patient or to_doctor:
+        transition(
+            case,
+            WorkflowCase.Status.FAILED,
+            "REPORT_DELIVERY_FAILED",
+            stage="REPORT_DELIVERY",
+            message="Report email delivery failed.",
+            failure_reason="Report email delivery failed.",
+            metadata={"to_patient": to_patient, "to_doctor": to_doctor, "patient_status": patient_status, "doctor_status": doctor_status},
+        )
     return case
 
 

@@ -10,6 +10,9 @@
   {% if regenerated %}
     <p class="alert alert-success"><strong>Report refreshed.</strong> The latest report template has been applied.</p>
   {% endif %}
+  {% if delivery_notice %}
+    <p class="alert alert-info">{{ delivery_notice }}</p>
+  {% endif %}
 
   <div class="summary-grid">
     <div class="surface-card surface-card--subtle">
@@ -58,12 +61,25 @@
       {% if patient_logs %}
         {% for log in patient_logs|slice:":1" %}
           <h3>{{ log.status }}</h3>
-          <p class="muted">Sent to {{ log.to_email }} on {{ log.created_at|date:"d M Y, h:i A" }}</p>
+          <p class="muted">Attempted for {{ log.to_email }} on {{ log.created_at|date:"d M Y, h:i A" }}</p>
           {% if log.error_text %}<p class="alert alert-error">{{ log.error_text }}</p>{% endif %}
         {% endfor %}
+      {% elif not order.patient_email %}
+        <h3>Email Needed</h3>
+        <p class="muted">Patient email was not captured before payment, so no patient email attempt has been made yet.</p>
       {% else %}
         <h3>Pending</h3>
         <p class="muted">No patient email attempt has been recorded yet.</p>
+      {% endif %}
+      {% if report %}
+        <form method="post" class="stack-sm">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="send_patient_report">
+          {{ patient_email_form.as_p }}
+          <button class="btn btn-green" type="submit">
+            {% if latest_patient_log %}Retry Patient Email{% else %}Send Patient Email{% endif %}
+          </button>
+        </form>
       {% endif %}
     </div>
     <div class="surface-card surface-card--subtle">
@@ -71,7 +87,7 @@
       {% if doctor_logs %}
         {% for log in doctor_logs|slice:":1" %}
           <h3>{{ log.status }}</h3>
-          <p class="muted">Doctor and patient report PDFs were sent to the doctor record.</p>
+          <p class="muted">Doctor and patient report PDF delivery was attempted for the doctor record.</p>
           {% if log.error_text %}<p class="alert alert-error">{{ log.error_text }}</p>{% endif %}
         {% endfor %}
       {% else %}

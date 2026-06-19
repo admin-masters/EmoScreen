@@ -153,15 +153,19 @@ def patient_entry(request, order_code, doctor_code, form_code, final_amount_pais
             order.patient_email = form.cleaned_data["patient_email"]
             order.save(update_fields=["patient_email", "updated_at"])
             audit.update_patient_contact(workflow_case, patient_email=order.patient_email, request=request)
+            if order.final_amount_paise == 0 or order.status == EsPayOrder.Status.PAID:
+                return redirect("paid:patient_form", order_code=order.order_code)
+            return redirect("paid:patient_payment", order_code=order.order_code)
     else:
         form = PatientEmailForm(initial={"patient_email": order.patient_email})
 
+    if not order.patient_email:
+        return render(request, "paid/patient_entry.html", {"order": order, "email_form": form, "amount_path": final_amount_paise, "final_amount_rupees": order.final_amount_paise / 100, **JOURNEY_LOCKED_CONTEXT})
     if order.final_amount_paise == 0:
         return redirect("paid:patient_form", order_code=order.order_code)
     if order.status == EsPayOrder.Status.PAID:
         return redirect("paid:patient_form", order_code=order.order_code)
-
-    return render(request, "paid/patient_entry.html", {"order": order, "email_form": form, "amount_path": final_amount_paise, "final_amount_rupees": order.final_amount_paise / 100, **JOURNEY_LOCKED_CONTEXT})
+    return redirect("paid:patient_payment", order_code=order.order_code)
 
 
 @require_http_methods(["GET", "POST"])
@@ -170,6 +174,26 @@ def patient_payment(request, order_code):
     if _paid_order_is_final(order):
         return redirect("paid:patient_thank_you", order_code=order.order_code)
     workflow_case = audit.case_for_order(order)
+
+    if not order.patient_email:
+        form = PatientEmailForm(request.POST or None)
+        if request.method == "POST" and form.is_valid():
+            order.patient_email = form.cleaned_data["patient_email"]
+            order.save(update_fields=["patient_email", "updated_at"])
+            audit.update_patient_contact(workflow_case, patient_email=order.patient_email, request=request)
+            return redirect("paid:patient_payment", order_code=order.order_code)
+        return render(
+            request,
+            "paid/patient_entry.html",
+            {
+                "order": order,
+                "email_form": form,
+                "amount_path": order.final_amount_paise,
+                "final_amount_rupees": order.final_amount_paise / 100,
+                "email_required_notice": "Please enter the patient email before continuing. This is where the patient report will be sent.",
+                **JOURNEY_LOCKED_CONTEXT,
+            },
+        )
 
     if order.final_amount_paise <= 0:
         return redirect("paid:patient_form", order_code=order.order_code)
@@ -389,6 +413,8 @@ def patient_form(request, order_code):
     order = get_object_or_404(EsPayOrder, order_code=order_code)
     if _paid_order_is_final(order):
         return redirect("paid:patient_thank_you", order_code=order.order_code)
+    if not order.patient_email:
+        return redirect("paid:patient_payment", order_code=order.order_code)
     if order.final_amount_paise > 0 and order.status != EsPayOrder.Status.PAID:
         return redirect("paid:patient_payment", order_code=order.order_code)
     workflow_case = audit.case_for_order(order)
@@ -566,6 +592,7 @@ def download_report(request, order_code, kind):
 def patient_thank_you(request, order_code):
     order = get_object_or_404(EsPayOrder, order_code=order_code)
     submission = EsSubSubmission.objects.filter(order=order).first()
+    workflow_case = audit.case_for_order(order)
 
     regenerated = False
     if submission and request.GET.get("refresh") == "1":
@@ -573,9 +600,46 @@ def patient_thank_you(request, order_code):
         regenerated = True
 
     report = EsRepReport.objects.filter(submission=submission).first() if submission else None
+    delivery_notice = ""
+    patient_email_form = PatientEmailForm(initial={"patient_email": order.patient_email})
+
+    if request.method == "POST" and request.POST.get("action") == "send_patient_report":
+        patient_email_form = PatientEmailForm(request.POST)
+        if patient_email_form.is_valid():
+            order.patient_email = patient_email_form.cleaned_data["patient_email"]
+            order.save(update_fields=["patient_email", "updated_at"])
+            audit.update_patient_contact(workflow_case, patient_email=order.patient_email, request=request)
+            if not report and submission:
+                report, _patient_pdf, _doctor_pdf = generate_and_store_reports(submission)
+                audit.mark_report_generated(workflow_case, report)
+            if report:
+                try:
+                    patient_status, attempted = _send_paid_patient_report_email(
+                        order,
+                        report,
+                        _read_report_pdf(report.patient_pdf_path),
+                        workflow_case,
+                    )
+                    audit.mark_report_sent(
+                        workflow_case,
+                        to_patient=attempted,
+                        patient_status=patient_status,
+                    )
+                    delivery_notice = (
+                        "Patient report email request recorded."
+                        if patient_status in {"SENT", "QUEUED"}
+                        else "Patient report email could not be delivered. Please use Download Patient Report until email is configured."
+                    )
+                except OSError as exc:
+                    delivery_notice = f"Patient report PDF could not be read for email delivery: {exc}"
+            else:
+                delivery_notice = "Report is still processing. Please refresh and try again."
+
     email_logs = list(EsPayEmailLog.objects.filter(order=order).order_by("-created_at")[:10])
     patient_logs = [log for log in email_logs if log.email_type == EsPayEmailLog.EmailType.PATIENT_REPORT]
     doctor_logs = [log for log in email_logs if log.email_type == EsPayEmailLog.EmailType.DOCTOR_REPORT]
+    latest_patient_log = patient_logs[0] if patient_logs else None
+    latest_doctor_log = doctor_logs[0] if doctor_logs else None
 
     patient_password = ""
     doctor_password = ""
@@ -593,6 +657,10 @@ def patient_thank_you(request, order_code):
             "patient_password": patient_password,
             "doctor_password": doctor_password,
             "regenerated": regenerated,
+            "delivery_notice": delivery_notice,
+            "patient_email_form": patient_email_form,
+            "latest_patient_log": latest_patient_log,
+            "latest_doctor_log": latest_doctor_log,
             "email_logs": email_logs,
             "patient_logs": patient_logs,
             "doctor_logs": doctor_logs,
@@ -702,90 +770,112 @@ def _send_assessment_link_email(order, request, workflow_case=None):
     return email_log
 
 
+def _delivery_status(ok, meta):
+    return "SENT" if (ok and str(meta).startswith("smtp:")) else ("QUEUED" if ok else "FAILED")
+
+
+def _email_provider():
+    return "sendgrid" if getattr(settings, "SENDGRID_API_KEY", "") else "local-email-backend"
+
+
+def _read_report_pdf(path):
+    with open(path, "rb") as handle:
+        return handle.read()
+
+
+def _send_paid_patient_report_email(order, report, patient_pdf: bytes, workflow_case=None):
+    if not order.patient_email:
+        return "", False
+
+    subject = "Patient Report for EmoScreen"
+    ok, meta = _sendgrid_send_with_attachments(
+        order.patient_email,
+        subject,
+        "<p>Attached is your EmoScreen patient report.</p>",
+        [("patient_report.pdf", patient_pdf)],
+    )
+    delivery_status = _delivery_status(ok, meta)
+    email_log = log_email(
+        order,
+        "PATIENT_REPORT",
+        order.patient_email,
+        subject,
+        status=delivery_status,
+        error_text="" if ok else str(meta),
+        sendgrid_message_id=meta if ok else "",
+    )
+    if workflow_case:
+        audit.record_delivery(
+            workflow_case,
+            channel="EMAIL",
+            recipient=order.patient_email,
+            subject=subject,
+            status=delivery_status,
+            provider=_email_provider(),
+            provider_message_id=meta if ok else "",
+            error_text="" if ok else str(meta),
+            metadata={"email_type": "PATIENT_REPORT"},
+            email_log=email_log,
+        )
+    if ok and report:
+        report.emailed_to_parent_at = timezone.now()
+        report.save(update_fields=["emailed_to_parent_at"])
+    return delivery_status, True
+
+
+def _send_paid_doctor_report_email(order, report, patient_pdf: bytes, doctor_pdf: bytes, workflow_case=None):
+    doctor_email = order.doctor.email
+    if not doctor_email:
+        return "", False
+
+    subject = "Doctor Report for EmoScreen"
+    ok, meta = _sendgrid_send_with_attachments(
+        doctor_email,
+        subject,
+        "<p>Attached are doctor and patient EmoScreen reports.</p>",
+        [("doctor_report.pdf", doctor_pdf), ("patient_report.pdf", patient_pdf)],
+    )
+    delivery_status = _delivery_status(ok, meta)
+    email_log = log_email(
+        order,
+        "DOCTOR_REPORT",
+        doctor_email,
+        subject,
+        status=delivery_status,
+        error_text="" if ok else str(meta),
+        sendgrid_message_id=meta if ok else "",
+    )
+    if workflow_case:
+        audit.record_delivery(
+            workflow_case,
+            channel="EMAIL",
+            recipient=doctor_email,
+            subject=subject,
+            status=delivery_status,
+            provider=_email_provider(),
+            provider_message_id=meta if ok else "",
+            error_text="" if ok else str(meta),
+            metadata={"email_type": "DOCTOR_REPORT"},
+            email_log=email_log,
+        )
+    if ok and report:
+        report.emailed_to_doctor_at = timezone.now()
+        report.save(update_fields=["emailed_to_doctor_at"])
+    return delivery_status, True
+
+
 def _send_report_emails(order, report, patient_pdf: bytes, doctor_pdf: bytes, workflow_case=None):
-    parent_subject = "Patient Report for EmoScreen"
-    doctor_subject = "Doctor Report for EmoScreen"
     patient_status = ""
     doctor_status = ""
-    sent_to_patient = False
-    sent_to_doctor = False
+    attempted_patient = False
+    attempted_doctor = False
 
-    if order.patient_email:
-        ok, meta = _sendgrid_send_with_attachments(
-            order.patient_email,
-            parent_subject,
-            "<p>Attached is your EmoScreen patient report.</p>",
-            [("patient_report.pdf", patient_pdf)],
-        )
-        delivery_status = "SENT" if (ok and str(meta).startswith("smtp:")) else ("QUEUED" if ok else "FAILED")
-        patient_log = log_email(
-            order,
-            "PATIENT_REPORT",
-            order.patient_email,
-            parent_subject,
-            status=delivery_status,
-            error_text="" if ok else str(meta),
-            sendgrid_message_id=meta if ok else "",
-        )
-        patient_status = delivery_status
-        sent_to_patient = True
-        if workflow_case:
-            audit.record_delivery(
-                workflow_case,
-                channel="EMAIL",
-                recipient=order.patient_email,
-                subject=parent_subject,
-                status=delivery_status,
-                provider="sendgrid" if getattr(settings, "SENDGRID_API_KEY", "") else "local-email-backend",
-                provider_message_id=meta if ok else "",
-                error_text="" if ok else str(meta),
-                metadata={"email_type": "PATIENT_REPORT"},
-                email_log=patient_log,
-            )
-        if ok:
-            report.emailed_to_parent_at = timezone.now()
-
-    doctor_email = order.doctor.email
-    if doctor_email:
-        ok, meta = _sendgrid_send_with_attachments(
-            doctor_email,
-            doctor_subject,
-            "<p>Attached are doctor and patient EmoScreen reports.</p>",
-            [("doctor_report.pdf", doctor_pdf), ("patient_report.pdf", patient_pdf)],
-        )
-        delivery_status = "SENT" if (ok and str(meta).startswith("smtp:")) else ("QUEUED" if ok else "FAILED")
-        doctor_log = log_email(
-            order,
-            "DOCTOR_REPORT",
-            doctor_email,
-            doctor_subject,
-            status=delivery_status,
-            error_text="" if ok else str(meta),
-            sendgrid_message_id=meta if ok else "",
-        )
-        doctor_status = delivery_status
-        sent_to_doctor = True
-        if workflow_case:
-            audit.record_delivery(
-                workflow_case,
-                channel="EMAIL",
-                recipient=doctor_email,
-                subject=doctor_subject,
-                status=delivery_status,
-                provider="sendgrid" if getattr(settings, "SENDGRID_API_KEY", "") else "local-email-backend",
-                provider_message_id=meta if ok else "",
-                error_text="" if ok else str(meta),
-                metadata={"email_type": "DOCTOR_REPORT"},
-                email_log=doctor_log,
-            )
-        if ok:
-            report.emailed_to_doctor_at = timezone.now()
-
-    report.save(update_fields=["emailed_to_parent_at", "emailed_to_doctor_at"])
+    patient_status, attempted_patient = _send_paid_patient_report_email(order, report, patient_pdf, workflow_case)
+    doctor_status, attempted_doctor = _send_paid_doctor_report_email(order, report, patient_pdf, doctor_pdf, workflow_case)
     audit.mark_report_sent(
         workflow_case,
-        to_patient=sent_to_patient,
-        to_doctor=sent_to_doctor,
+        to_patient=attempted_patient,
+        to_doctor=attempted_doctor,
         patient_status=patient_status,
         doctor_status=doctor_status,
     )
