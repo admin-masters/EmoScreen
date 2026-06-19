@@ -379,9 +379,11 @@ def razorpay_webhook(request):
         return HttpResponseBadRequest("Invalid JSON")
 
     event = payload.get("event", "")
-    entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
-    gateway_order_id = entity.get("order_id", "")
-    payment_id = entity.get("id", "")
+    payload_root = payload.get("payload", {})
+    payment_entity = payload_root.get("payment", {}).get("entity", {})
+    order_entity = payload_root.get("order", {}).get("entity", {})
+    gateway_order_id = payment_entity.get("order_id") or order_entity.get("id", "")
+    payment_id = payment_entity.get("id", "")
 
     tx = EsPayTransaction.objects.filter(gateway_order_id=gateway_order_id).order_by("-created_at").first()
     if not tx:
@@ -402,7 +404,9 @@ def razorpay_webhook(request):
             order.paid_at = timezone.now()
             order.save(update_fields=["status", "paid_at", "updated_at"])
         _create_revenue_split(tx)
-        audit.mark_payment_completed(audit.case_for_order(order), order, tx)
+        workflow_case = audit.case_for_order(order)
+        audit.mark_payment_completed(workflow_case, order, tx)
+        _send_assessment_link_email(order, request, workflow_case)
     elif tx.status == EsPayTransaction.Status.FAILED:
         audit.mark_payment_failed(audit.case_for_order(tx.order), tx.order, tx, "Razorpay webhook marked payment failed.")
 
@@ -674,16 +678,26 @@ def _send_assessment_link_email(order, request, workflow_case=None):
     if not order.patient_email:
         return None
 
+    existing_success = EsPayEmailLog.objects.filter(
+        order=order,
+        email_type=EsPayEmailLog.EmailType.PAYMENT_LINK,
+        status=EsPayEmailLog.Status.SENT,
+    ).exists()
+    if existing_success:
+        return None
+
     link = request.build_absolute_uri(reverse("paid:patient_form", args=[order.order_code]))
     subject = "EmoScreen Assessment Link"
+    patient_name = escape(order.patient_name or "Parent")
     ok, meta = _sendgrid_send_with_attachments(
         order.patient_email,
         subject,
         (
-            f"<p>Dear {order.patient_name},</p>"
-            "<p>Your doctor has prescribed EmoScreen service for you.</p>"
-            f"<p>Please complete the assessment using this link: <a href=\"{link}\">{link}</a></p>"
-            "<p>For support, please send a WhatsApp message to +91-8297634553.</p>"
+            f"<p>Dear {patient_name}, Your doctor has prescribed EmoScreen service for you.</p>"
+            f"<p>Please complete the assessment by filling up the form at this link: "
+            f"<a href=\"{link}\">{link}</a></p>"
+            "<p>If you need help to understand any of the questions please take help from your doctor.</p>"
+            "<p>For any further queries or support, please send a WhatsApp message to: +91-8297634553.</p>"
         ),
         [],
     )
