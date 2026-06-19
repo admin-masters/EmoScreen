@@ -6,6 +6,10 @@ on:
       - Staging
   workflow_dispatch:
 
+concurrency:
+  group: emoscreen-staging-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy-staging:
     runs-on: ubuntu-latest
@@ -20,6 +24,11 @@ jobs:
           script: |
             set -e
             cd /var/www/EmoScreen
+
+            if ! git diff --quiet -- scripts/deploy.sh; then
+              echo "Preserving local scripts/deploy.sh change before deployment pull"
+              git stash push -m "pre-deploy scripts/deploy.sh $(date -u +%Y%m%d%H%M%S)" -- scripts/deploy.sh
+            fi
 
             git fetch origin Staging
             if git show-ref --verify --quiet refs/heads/Staging; then
