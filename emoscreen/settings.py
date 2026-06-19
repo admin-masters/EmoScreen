@@ -12,6 +12,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Local development .env
 LOCAL_ENV = BASE_DIR / ".env"
 
+# Deployment-specific non-secret settings written by scripts/deploy.sh
+DEPLOY_ENV_FILE = BASE_DIR / ".deploy_env"
+
 # Production secrets file
 PROD_ENV = Path("/var/www/secrets/.env")
 
@@ -20,6 +23,9 @@ if PROD_ENV.exists():
 elif LOCAL_ENV.exists():
     load_dotenv(LOCAL_ENV)
 
+if DEPLOY_ENV_FILE.exists():
+    load_dotenv(DEPLOY_ENV_FILE, override=True)
+
 # --------------------------------------------------
 # Security
 # --------------------------------------------------
@@ -27,10 +33,20 @@ elif LOCAL_ENV.exists():
 SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-secret-key-change-me")
 
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
-ALLOWED_HOSTS = os.getenv(
+
+
+def csv_env(name, default):
+    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
+
+ALLOWED_HOSTS = csv_env(
     "ALLOWED_HOSTS",
-    "127.0.0.1,localhost"
-).split(",")
+    "127.0.0.1,localhost,emo.stage.cpdinclinic.co.in,emo.cpdinclinic.co.in,www.emo.cpdinclinic.co.in",
+)
+CSRF_TRUSTED_ORIGINS = csv_env(
+    "CSRF_TRUSTED_ORIGINS",
+    "https://emo.stage.cpdinclinic.co.in,https://emo.cpdinclinic.co.in,https://www.emo.cpdinclinic.co.in",
+)
 # --------------------------------------------------
 # Applications
 # --------------------------------------------------
