@@ -38,11 +38,10 @@ jobs:
             fi
             git pull --ff-only origin Staging
 
-            chmod +x scripts/deploy.sh
             DEPLOY_ENV=staging \
             DEPLOY_BRANCH=Staging \
             DJANGO_DEBUG=true \
             ALLOWED_HOSTS=127.0.0.1,localhost,emo.stage.cpdinclinic.co.in \
             CSRF_TRUSTED_ORIGINS=https://emo.stage.cpdinclinic.co.in \
             FORCE_HTTPS=true \
-            ./scripts/deploy.sh
+            bash scripts/deploy.sh
