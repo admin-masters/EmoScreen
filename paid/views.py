@@ -7,6 +7,7 @@ from django.conf import settings
 from django.http import FileResponse, Http404, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.html import escape
 from django.utils import timezone
 from django.db import transaction
 from django.views.decorators.http import require_http_methods
@@ -601,37 +602,68 @@ def patient_thank_you(request, order_code):
 
     report = EsRepReport.objects.filter(submission=submission).first() if submission else None
     delivery_notice = ""
-    patient_email_form = PatientEmailForm(initial={"patient_email": order.patient_email})
+    patient_email_form = None if order.patient_email else PatientEmailForm()
 
-    if request.method == "POST" and request.POST.get("action") == "send_patient_report":
-        patient_email_form = PatientEmailForm(request.POST)
-        if patient_email_form.is_valid():
-            order.patient_email = patient_email_form.cleaned_data["patient_email"]
-            order.save(update_fields=["patient_email", "updated_at"])
-            audit.update_patient_contact(workflow_case, patient_email=order.patient_email, request=request)
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "send_patient_report":
+            if not order.patient_email:
+                patient_email_form = PatientEmailForm(request.POST)
+            if order.patient_email or (patient_email_form and patient_email_form.is_valid()):
+                if not order.patient_email:
+                    order.patient_email = patient_email_form.cleaned_data["patient_email"]
+                    order.save(update_fields=["patient_email", "updated_at"])
+                    audit.update_patient_contact(workflow_case, patient_email=order.patient_email, request=request)
+                if not report and submission:
+                    report, _patient_pdf, _doctor_pdf = generate_and_store_reports(submission)
+                    audit.mark_report_generated(workflow_case, report)
+                if report:
+                    try:
+                        patient_status, attempted = _send_paid_patient_report_email(
+                            order,
+                            report,
+                            _read_report_pdf(report.patient_pdf_path),
+                            workflow_case,
+                        )
+                        audit.mark_report_sent(
+                            workflow_case,
+                            to_patient=attempted,
+                            patient_status=patient_status,
+                        )
+                        delivery_notice = (
+                            "Patient report email sent."
+                            if patient_status == "SENT"
+                            else "Patient report email could not be delivered. Please use Download Patient Report until email is configured."
+                        )
+                    except OSError as exc:
+                        delivery_notice = f"Patient report PDF could not be read for email delivery: {exc}"
+                else:
+                    delivery_notice = "Report is still processing. Please refresh and try again."
+        elif action == "send_doctor_report":
             if not report and submission:
                 report, _patient_pdf, _doctor_pdf = generate_and_store_reports(submission)
                 audit.mark_report_generated(workflow_case, report)
             if report:
                 try:
-                    patient_status, attempted = _send_paid_patient_report_email(
+                    doctor_status, attempted = _send_paid_doctor_report_email(
                         order,
                         report,
                         _read_report_pdf(report.patient_pdf_path),
+                        _read_report_pdf(report.doctor_pdf_path),
                         workflow_case,
                     )
                     audit.mark_report_sent(
                         workflow_case,
-                        to_patient=attempted,
-                        patient_status=patient_status,
+                        to_doctor=attempted,
+                        doctor_status=doctor_status,
                     )
                     delivery_notice = (
-                        "Patient report email request recorded."
-                        if patient_status in {"SENT", "QUEUED"}
-                        else "Patient report email could not be delivered. Please use Download Patient Report until email is configured."
+                        "Doctor report email sent."
+                        if doctor_status == "SENT"
+                        else "Doctor report email could not be delivered. Check SendGrid or SMTP configuration."
                     )
                 except OSError as exc:
-                    delivery_notice = f"Patient report PDF could not be read for email delivery: {exc}"
+                    delivery_notice = f"Doctor report PDFs could not be read for email delivery: {exc}"
             else:
                 delivery_notice = "Report is still processing. Please refresh and try again."
 
@@ -744,7 +776,7 @@ def _send_assessment_link_email(order, request, workflow_case=None):
         ),
         [],
     )
-    delivery_status = "SENT" if (ok and str(meta).startswith("smtp:")) else ("QUEUED" if ok else "FAILED")
+    delivery_status = _delivery_status(ok, meta)
     email_log = log_email(
         order,
         "PAYMENT_LINK",
@@ -761,7 +793,7 @@ def _send_assessment_link_email(order, request, workflow_case=None):
             recipient=order.patient_email,
             subject=subject,
             status=delivery_status,
-            provider="sendgrid" if getattr(settings, "SENDGRID_API_KEY", "") else "local-email-backend",
+            provider=_email_provider(),
             provider_message_id=meta if ok else "",
             error_text="" if ok else str(meta),
             metadata={"link": link, "email_type": "PAYMENT_LINK"},
@@ -771,7 +803,7 @@ def _send_assessment_link_email(order, request, workflow_case=None):
 
 
 def _delivery_status(ok, meta):
-    return "SENT" if (ok and str(meta).startswith("smtp:")) else ("QUEUED" if ok else "FAILED")
+    return "SENT" if ok else "FAILED"
 
 
 def _email_provider():
@@ -783,6 +815,46 @@ def _read_report_pdf(path):
         return handle.read()
 
 
+def _paid_child_name(order, report=None):
+    submission = getattr(report, "submission", None)
+    return (getattr(submission, "child_name", "") or order.patient_name or "the child").strip()
+
+
+def _support_phone_display():
+    return getattr(settings, "SUPPORT_PHONE_DISPLAY", "+91-9321450803")
+
+
+def _paid_patient_report_body(order, report):
+    child_name = escape(_paid_child_name(order, report))
+    support_phone = escape(_support_phone_display())
+    return (
+        "<p>Dear Parent, please find the attached EmoScreen report.</p>"
+        f"<p>Please find the attached EmoScreen report below for {child_name}.<br>"
+        "Please connect with your doctor to know more.<br>"
+        f"For any further queries or support, please send a WhatsApp message to - {support_phone}.</p>"
+        "<p>The document is password protected. To open it, use the first 4 letters of your child's name "
+        "and the last 4 digits of the phone number as the password.<br>"
+        "For example, if your child's name is 'Emily' and their phone number is '9876543210', "
+        "the password will be 'Emil3210'.</p>"
+    )
+
+
+def _paid_doctor_report_body(order, report):
+    child_name = escape(_paid_child_name(order, report))
+    support_phone = escape(_support_phone_display())
+    return (
+        "<p>Dear Doctor, please find the attached EmoScreen report.</p>"
+        f"<p>Please find the attached EmoScreen report below for {child_name}.<br>"
+        "Please connect with your patient to know more.<br>"
+        f"For any further queries or support, please send a WhatsApp message to - {support_phone}.</p>"
+        "<p>The documents are password protected. To open them:<br>"
+        "For the doctor report, use the first 4 letters of your email and the last 4 digits of your phone number as the password.<br>"
+        "For example, if your email is 'johnsmith@example.com' and your phone number is '9876543210', your password will be 'john3210'.<br>"
+        "For the patient report, use the first 4 letters of the patient's name and the last 4 digits of the patient's phone number as the password.<br>"
+        "For example, if the patient's name is 'Emily' and their phone number is '9876543210', the password will be 'Emil3210'.</p>"
+    )
+
+
 def _send_paid_patient_report_email(order, report, patient_pdf: bytes, workflow_case=None):
     if not order.patient_email:
         return "", False
@@ -791,7 +863,7 @@ def _send_paid_patient_report_email(order, report, patient_pdf: bytes, workflow_
     ok, meta = _sendgrid_send_with_attachments(
         order.patient_email,
         subject,
-        "<p>Attached is your EmoScreen patient report.</p>",
+        _paid_patient_report_body(order, report),
         [("patient_report.pdf", patient_pdf)],
     )
     delivery_status = _delivery_status(ok, meta)
@@ -832,7 +904,7 @@ def _send_paid_doctor_report_email(order, report, patient_pdf: bytes, doctor_pdf
     ok, meta = _sendgrid_send_with_attachments(
         doctor_email,
         subject,
-        "<p>Attached are doctor and patient EmoScreen reports.</p>",
+        _paid_doctor_report_body(order, report),
         [("doctor_report.pdf", doctor_pdf), ("patient_report.pdf", patient_pdf)],
     )
     delivery_status = _delivery_status(ok, meta)

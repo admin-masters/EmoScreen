@@ -23,12 +23,12 @@
     <div class="surface-card surface-card--subtle">
       <div class="page-eyebrow">Patient</div>
       <h3>{{ submission.child_name|default:order.patient_name }}</h3>
-      <p class="muted">Submitted on {{ order.submitted_at|date:"d M Y, h:i A"|default:"-" }}</p>
+      <p class="muted">Submitted on {{ order.submitted_at|date:"d M Y, h:i A"|default:"-" }} IST</p>
     </div>
     <div class="surface-card surface-card--subtle">
       <div class="page-eyebrow">Report</div>
       <h3>{% if report %}Generated{% else %}Processing{% endif %}</h3>
-      <p class="muted">{% if report %}Generated on {{ report.generated_at|date:"d M Y, h:i A" }}{% else %}Please refresh after a few minutes.{% endif %}</p>
+      <p class="muted">{% if report %}Generated on {{ report.generated_at|date:"d M Y, h:i A" }} IST{% else %}Please refresh after a few minutes.{% endif %}</p>
     </div>
   </div>
 
@@ -61,7 +61,7 @@
       {% if patient_logs %}
         {% for log in patient_logs|slice:":1" %}
           <h3>{{ log.status }}</h3>
-          <p class="muted">Attempted for {{ log.to_email }} on {{ log.created_at|date:"d M Y, h:i A" }}</p>
+          <p class="muted">Attempted for {{ log.to_email }} on {{ log.created_at|date:"d M Y, h:i A" }} IST</p>
           {% if log.error_text %}<p class="alert alert-error">{{ log.error_text }}</p>{% endif %}
         {% endfor %}
       {% elif not order.patient_email %}
@@ -75,7 +75,11 @@
         <form method="post" class="stack-sm">
           {% csrf_token %}
           <input type="hidden" name="action" value="send_patient_report">
-          {{ patient_email_form.as_p }}
+          {% if order.patient_email %}
+            <p class="muted">Patient email: {{ order.patient_email }}</p>
+          {% else %}
+            {{ patient_email_form.as_p }}
+          {% endif %}
           <button class="btn btn-green" type="submit">
             {% if latest_patient_log %}Retry Patient Email{% else %}Send Patient Email{% endif %}
           </button>
@@ -87,12 +91,23 @@
       {% if doctor_logs %}
         {% for log in doctor_logs|slice:":1" %}
           <h3>{{ log.status }}</h3>
+          <p class="muted">Attempted for {{ log.to_email }} on {{ log.created_at|date:"d M Y, h:i A" }} IST</p>
           <p class="muted">Doctor and patient report PDF delivery was attempted for the doctor record.</p>
           {% if log.error_text %}<p class="alert alert-error">{{ log.error_text }}</p>{% endif %}
         {% endfor %}
       {% else %}
         <h3>Pending</h3>
         <p class="muted">Doctor delivery has not been recorded yet.</p>
+      {% endif %}
+      {% if report %}
+        <form method="post" class="stack-sm">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="send_doctor_report">
+          <p class="muted">Doctor email: {{ order.doctor.email }}</p>
+          <button class="btn btn-green" type="submit">
+            {% if latest_doctor_log %}Retry Doctor Email{% else %}Send Doctor Email{% endif %}
+          </button>
+        </form>
       {% endif %}
     </div>
   </div>
