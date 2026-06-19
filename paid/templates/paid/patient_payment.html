@@ -26,6 +26,13 @@
     </form>
     <p class="muted">Local reference: {{ gateway_order_id }}</p>
   {% else %}
+    {% if razorpay_test_mode %}
+      <div class="alert alert-info">
+        Razorpay test mode is enabled. UPI QR codes in test mode may not work with real UPI apps, so this checkout is configured for card testing.
+        Use card number <strong>4111 1111 1111 1111</strong>, any future expiry, and any CVV.
+      </div>
+    {% endif %}
+
     <form id="payment-result-form" method="post" class="is-hidden">
       {% csrf_token %}
       <input type="hidden" name="razorpay_payment_id" id="razorpay_payment_id">
@@ -62,6 +69,24 @@
         notes: {
           order_code: "{{ order.order_code|escapejs }}"
         },
+        {% if razorpay_test_mode %}
+        config: {
+          display: {
+            blocks: {
+              cards_only: {
+                name: "Test payment by card",
+                instruments: [
+                  { method: "card" }
+                ]
+              }
+            },
+            sequence: ["block.cards_only"],
+            preferences: {
+              show_default_blocks: false
+            }
+          }
+        },
+        {% endif %}
         theme: { color: "#2AA7A1" },
         handler: function (response) {
           document.getElementById("razorpay_payment_id").value = response.razorpay_payment_id || "";
