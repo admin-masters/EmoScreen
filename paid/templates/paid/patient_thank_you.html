@@ -2,118 +2,23 @@
 {% block content %}
 <section class="page-header text-center narrow-shell center-shell">
   <div class="page-eyebrow center-shell">Assessment Submitted</div>
-  <h1>Your EmoScreen Report</h1>
-  <p class="page-subtitle center-shell">Your assessment has been submitted successfully. Please keep your order code for future reference.</p>
+  <h1>Thank You</h1>
+  <p class="page-subtitle center-shell">Your EmoScreen assessment has been submitted successfully.</p>
 </section>
 
-<div class="card">
-  {% if regenerated %}
-    <p class="alert alert-success"><strong>Report refreshed.</strong> The latest report template has been applied.</p>
-  {% endif %}
-  {% if delivery_notice %}
-    <p class="alert alert-info">{{ delivery_notice }}</p>
-  {% endif %}
-
-  <div class="summary-grid">
-    <div class="surface-card surface-card--subtle">
-      <div class="page-eyebrow">Order</div>
-      <h3>{{ order.order_code }}</h3>
-      <p class="muted">{{ order.form.title }}</p>
-    </div>
-    <div class="surface-card surface-card--subtle">
-      <div class="page-eyebrow">Patient</div>
-      <h3>{{ submission.child_name|default:order.patient_name }}</h3>
-      <p class="muted">Submitted on {{ order.submitted_at|date:"d M Y, h:i A"|default:"-" }} IST</p>
-    </div>
-    <div class="surface-card surface-card--subtle">
-      <div class="page-eyebrow">Report</div>
-      <h3>{% if report %}Generated{% else %}Processing{% endif %}</h3>
-      <p class="muted">{% if report %}Generated on {{ report.generated_at|date:"d M Y, h:i A" }} IST{% else %}Please refresh after a few minutes.{% endif %}</p>
-    </div>
-  </div>
-
-  {% if submission %}
-    <div class="card surface-card--subtle">
-      {% if submission.has_concerns %}
-        <p><strong>Some areas may need attention.</strong></p>
-        <p>Please share this report with your doctor for interpretation and next steps.</p>
-      {% else %}
-        <p><strong>No major concern was identified from the submitted paid assessment responses.</strong></p>
-        <p>This report is a screening aid and should be discussed with your doctor if you still have concerns.</p>
-      {% endif %}
-    </div>
-  {% endif %}
-
+<div class="card text-center narrow-shell center-shell">
   {% if report %}
-    <div class="inline-actions">
+    <h2>Your report has been mailed</h2>
+    <p>Your EmoScreen report has been mailed to the registered email address.</p>
+    <p class="muted">You can also download your patient report below for your records.</p>
+    <div class="inline-actions center-shell">
       <a class="btn btn-green" href="{% url 'paid:download_report' order.order_code 'patient' %}">Download Patient Report</a>
     </div>
     <p class="muted">Patient PDF password: first 4 letters of the child name + last 4 digits of the registered WhatsApp number.</p>
   {% else %}
-    <p class="alert alert-info">Report generation is still in progress. Please refresh this screen shortly.</p>
+    <h2>Report is being prepared</h2>
+    <p>Your report is being generated. Please refresh this page after a few minutes.</p>
   {% endif %}
-
-  <hr>
-  <h3>Report Delivery</h3>
-  <div class="summary-grid">
-    <div class="surface-card surface-card--subtle">
-      <div class="page-eyebrow">Patient Copy</div>
-      {% if patient_logs %}
-        {% for log in patient_logs|slice:":1" %}
-          <h3>{{ latest_patient_status }}</h3>
-          <p class="muted">Attempted for {{ log.to_email }} on {{ log.created_at|date:"d M Y, h:i A" }} IST</p>
-          {% if log.error_text %}<p class="alert alert-error">{{ log.error_text }}</p>{% endif %}
-        {% endfor %}
-      {% elif not order.patient_email %}
-        <h3>Email Needed</h3>
-        <p class="muted">Patient email was not captured before payment, so no patient email attempt has been made yet.</p>
-      {% else %}
-        <h3>Pending</h3>
-        <p class="muted">No patient email attempt has been recorded yet.</p>
-      {% endif %}
-      {% if report %}
-        <form method="post" class="stack-sm">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="send_patient_report">
-          {% if order.patient_email %}
-            <p class="muted">Patient email: {{ order.patient_email }}</p>
-          {% else %}
-            {{ patient_email_form.as_p }}
-          {% endif %}
-          <button class="btn btn-green" type="submit">
-            {% if latest_patient_log %}Retry Patient Email{% else %}Send Patient Email{% endif %}
-          </button>
-        </form>
-      {% endif %}
-    </div>
-    <div class="surface-card surface-card--subtle">
-      <div class="page-eyebrow">Doctor Copy</div>
-      {% if doctor_logs %}
-        {% for log in doctor_logs|slice:":1" %}
-          <h3>{{ latest_doctor_status }}</h3>
-          <p class="muted">Attempted for {{ log.to_email }} on {{ log.created_at|date:"d M Y, h:i A" }} IST</p>
-          <p class="muted">Doctor and patient report PDF delivery was attempted for the doctor record.</p>
-          {% if log.error_text %}<p class="alert alert-error">{{ log.error_text }}</p>{% endif %}
-        {% endfor %}
-      {% else %}
-        <h3>Pending</h3>
-        <p class="muted">Doctor delivery has not been recorded yet.</p>
-      {% endif %}
-      {% if report %}
-        <form method="post" class="stack-sm">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="send_doctor_report">
-          <p class="muted">Doctor email: {{ order.doctor.email }}</p>
-          <button class="btn btn-green" type="submit">
-            {% if latest_doctor_log %}Retry Doctor Email{% else %}Send Doctor Email{% endif %}
-          </button>
-        </form>
-      {% endif %}
-    </div>
-  </div>
-
-  <div class="inline-actions">
-    <a class="btn" href="?refresh=1">Refresh Report Status</a>
-  </div>
+  <p class="muted">Order code: {{ order.order_code }}</p>
 </div>
 {% endblock %}

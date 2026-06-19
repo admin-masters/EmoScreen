@@ -113,6 +113,7 @@
           <th>Payment</th>
           <th>Progress</th>
           <th>Last event</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -126,10 +127,17 @@
             <td>{{ case.get_payment_status_display }}<br><small>Rs. {{ case.amount_rupees|floatformat:2 }}</small></td>
             <td>{{ case.completion_percent }}%<br><small>{{ case.completed_questions }}/{{ case.total_questions }} answered</small></td>
             <td>{{ case.last_event_at|date:"Y-m-d H:i"|default:"-" }}</td>
+            <td>
+              {% if case.order %}
+                <a class="btn btn-sm" href="{% url 'paid:workflow_report_delivery' case.case_code %}">Delivery</a>
+              {% else %}
+                -
+              {% endif %}
+            </td>
           </tr>
         {% empty %}
           <tr>
-            <td colspan="8">No workflow cases match these filters.</td>
+            <td colspan="9">No workflow cases match these filters.</td>
           </tr>
         {% endfor %}
       </tbody>

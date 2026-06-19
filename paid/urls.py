@@ -18,4 +18,5 @@ urlpatterns = [
     path("payments/razorpay/webhook/", views.razorpay_webhook, name="razorpay_webhook"),
     path("support/workflows/", audit_views.workflow_dashboard, name="workflow_dashboard"),
     path("support/workflows/<str:case_code>/", audit_views.workflow_detail, name="workflow_detail"),
+    path("support/workflows/<str:case_code>/report-delivery/", audit_views.workflow_report_delivery, name="workflow_report_delivery"),
 ]

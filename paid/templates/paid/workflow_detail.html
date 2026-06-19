@@ -22,7 +22,7 @@
     {% endif %}
     {% if case.order %}
       <a class="btn" href="{% url 'paid:patient_form' case.order.order_code %}">Continue Form</a>
-      <a class="btn" href="{% url 'paid:patient_thank_you' case.order.order_code %}?refresh=1">Refresh Report</a>
+      <a class="btn btn-primary" href="{% url 'paid:workflow_report_delivery' case.case_code %}">Report Delivery</a>
     {% endif %}
   </div>
 </section>

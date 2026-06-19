@@ -593,93 +593,11 @@ def download_report(request, order_code, kind):
 def patient_thank_you(request, order_code):
     order = get_object_or_404(EsPayOrder, order_code=order_code)
     submission = EsSubSubmission.objects.filter(order=order).first()
-    workflow_case = audit.case_for_order(order)
-
-    regenerated = False
-    if submission and request.GET.get("refresh") == "1":
-        generate_and_store_reports(submission)
-        regenerated = True
-
     report = EsRepReport.objects.filter(submission=submission).first() if submission else None
-    delivery_notice = ""
-    patient_email_form = None if order.patient_email else PatientEmailForm()
-
-    if request.method == "POST":
-        action = request.POST.get("action")
-        if action == "send_patient_report":
-            if not order.patient_email:
-                patient_email_form = PatientEmailForm(request.POST)
-            if order.patient_email or (patient_email_form and patient_email_form.is_valid()):
-                if not order.patient_email:
-                    order.patient_email = patient_email_form.cleaned_data["patient_email"]
-                    order.save(update_fields=["patient_email", "updated_at"])
-                    audit.update_patient_contact(workflow_case, patient_email=order.patient_email, request=request)
-                if not report and submission:
-                    report, _patient_pdf, _doctor_pdf = generate_and_store_reports(submission)
-                    audit.mark_report_generated(workflow_case, report)
-                if report:
-                    try:
-                        patient_status, attempted = _send_paid_patient_report_email(
-                            order,
-                            report,
-                            _read_report_pdf(report.patient_pdf_path),
-                            workflow_case,
-                        )
-                        audit.mark_report_sent(
-                            workflow_case,
-                            to_patient=attempted,
-                            patient_status=patient_status,
-                        )
-                        delivery_notice = (
-                            "Patient report email sent."
-                            if patient_status == "SENT"
-                            else "Patient report email could not be delivered. Please use Download Patient Report until email is configured."
-                        )
-                    except OSError as exc:
-                        delivery_notice = f"Patient report PDF could not be read for email delivery: {exc}"
-                else:
-                    delivery_notice = "Report is still processing. Please refresh and try again."
-        elif action == "send_doctor_report":
-            if not report and submission:
-                report, _patient_pdf, _doctor_pdf = generate_and_store_reports(submission)
-                audit.mark_report_generated(workflow_case, report)
-            if report:
-                try:
-                    doctor_status, attempted = _send_paid_doctor_report_email(
-                        order,
-                        report,
-                        _read_report_pdf(report.patient_pdf_path),
-                        _read_report_pdf(report.doctor_pdf_path),
-                        workflow_case,
-                    )
-                    audit.mark_report_sent(
-                        workflow_case,
-                        to_doctor=attempted,
-                        doctor_status=doctor_status,
-                    )
-                    delivery_notice = (
-                        "Doctor report email sent."
-                        if doctor_status == "SENT"
-                        else "Doctor report email could not be delivered. Check SendGrid or SMTP configuration."
-                    )
-                except OSError as exc:
-                    delivery_notice = f"Doctor report PDFs could not be read for email delivery: {exc}"
-            else:
-                delivery_notice = "Report is still processing. Please refresh and try again."
-
-    email_logs = list(EsPayEmailLog.objects.filter(order=order).order_by("-created_at")[:10])
-    patient_logs = [log for log in email_logs if log.email_type == EsPayEmailLog.EmailType.PATIENT_REPORT]
-    doctor_logs = [log for log in email_logs if log.email_type == EsPayEmailLog.EmailType.DOCTOR_REPORT]
-    latest_patient_log = patient_logs[0] if patient_logs else None
-    latest_doctor_log = doctor_logs[0] if doctor_logs else None
-    latest_patient_status = _email_log_display_status(latest_patient_log)
-    latest_doctor_status = _email_log_display_status(latest_doctor_log)
 
     patient_password = ""
-    doctor_password = ""
     if submission and report:
         patient_password = build_pdf_password(submission.child_name or order.patient_name, order.patient_whatsapp)
-        doctor_password = build_pdf_password(order.doctor.email, order.doctor.whatsapp or "")
 
     return render(
         request,
@@ -689,17 +607,6 @@ def patient_thank_you(request, order_code):
             "submission": submission,
             "report": report,
             "patient_password": patient_password,
-            "doctor_password": doctor_password,
-            "regenerated": regenerated,
-            "delivery_notice": delivery_notice,
-            "patient_email_form": patient_email_form,
-            "latest_patient_log": latest_patient_log,
-            "latest_doctor_log": latest_doctor_log,
-            "latest_patient_status": latest_patient_status,
-            "latest_doctor_status": latest_doctor_status,
-            "email_logs": email_logs,
-            "patient_logs": patient_logs,
-            "doctor_logs": doctor_logs,
             **JOURNEY_LOCKED_CONTEXT,
         },
     )
