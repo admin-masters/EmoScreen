@@ -60,7 +60,7 @@
       <div class="page-eyebrow">Patient Copy</div>
       {% if patient_logs %}
         {% for log in patient_logs|slice:":1" %}
-          <h3>{{ log.status }}</h3>
+          <h3>{{ latest_patient_status }}</h3>
           <p class="muted">Attempted for {{ log.to_email }} on {{ log.created_at|date:"d M Y, h:i A" }} IST</p>
           {% if log.error_text %}<p class="alert alert-error">{{ log.error_text }}</p>{% endif %}
         {% endfor %}
@@ -90,7 +90,7 @@
       <div class="page-eyebrow">Doctor Copy</div>
       {% if doctor_logs %}
         {% for log in doctor_logs|slice:":1" %}
-          <h3>{{ log.status }}</h3>
+          <h3>{{ latest_doctor_status }}</h3>
           <p class="muted">Attempted for {{ log.to_email }} on {{ log.created_at|date:"d M Y, h:i A" }} IST</p>
           <p class="muted">Doctor and patient report PDF delivery was attempted for the doctor record.</p>
           {% if log.error_text %}<p class="alert alert-error">{{ log.error_text }}</p>{% endif %}

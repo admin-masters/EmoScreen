@@ -672,6 +672,8 @@ def patient_thank_you(request, order_code):
     doctor_logs = [log for log in email_logs if log.email_type == EsPayEmailLog.EmailType.DOCTOR_REPORT]
     latest_patient_log = patient_logs[0] if patient_logs else None
     latest_doctor_log = doctor_logs[0] if doctor_logs else None
+    latest_patient_status = _email_log_display_status(latest_patient_log)
+    latest_doctor_status = _email_log_display_status(latest_doctor_log)
 
     patient_password = ""
     doctor_password = ""
@@ -693,6 +695,8 @@ def patient_thank_you(request, order_code):
             "patient_email_form": patient_email_form,
             "latest_patient_log": latest_patient_log,
             "latest_doctor_log": latest_doctor_log,
+            "latest_patient_status": latest_patient_status,
+            "latest_doctor_status": latest_doctor_status,
             "email_logs": email_logs,
             "patient_logs": patient_logs,
             "doctor_logs": doctor_logs,
@@ -804,6 +808,14 @@ def _send_assessment_link_email(order, request, workflow_case=None):
 
 def _delivery_status(ok, meta):
     return "SENT" if ok else "FAILED"
+
+
+def _email_log_display_status(log):
+    if not log:
+        return ""
+    if log.status == EsPayEmailLog.Status.QUEUED and not log.error_text:
+        return "SENT"
+    return log.status
 
 
 def _email_provider():
