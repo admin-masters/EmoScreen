@@ -27,12 +27,10 @@ elif LOCAL_ENV.exists():
 SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-secret-key-change-me")
 
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
-
 ALLOWED_HOSTS = os.getenv(
     "ALLOWED_HOSTS",
     "127.0.0.1,localhost"
 ).split(",")
-
 # --------------------------------------------------
 # Applications
 # --------------------------------------------------
@@ -45,6 +43,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "content",
+    "paid",
     "social_django",
 ]
 
@@ -85,20 +84,34 @@ TEMPLATES = [{
 # Database
 # --------------------------------------------------
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.mysql",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT", "3306"),
-        "OPTIONS": {
-            "charset": "utf8mb4",
-            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-        },
+DB_ENGINE = os.getenv("DB_ENGINE", "sqlite" if not os.getenv("DB_NAME") else "mysql").lower()
+SQLITE_PATH = os.getenv("SQLITE_PATH", "db.sqlite3")
+
+if DB_ENGINE == "sqlite":
+    sqlite_name = Path(SQLITE_PATH)
+    if not sqlite_name.is_absolute():
+        sqlite_name = BASE_DIR / sqlite_name
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": sqlite_name,
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.getenv("DB_NAME"),
+            "USER": os.getenv("DB_USER"),
+            "PASSWORD": os.getenv("DB_PASSWORD"),
+            "HOST": os.getenv("DB_HOST"),
+            "PORT": os.getenv("DB_PORT", "3306"),
+            "OPTIONS": {
+                "charset": "utf8mb4",
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        }
+    }
 
 # --------------------------------------------------
 # Static / Media
@@ -106,6 +119,7 @@ DATABASES = {
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -128,6 +142,14 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")
 REPORT_FROM_NAME = os.getenv("REPORT_FROM_NAME", "EmoScreen")
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# --------------------------------------------------
+# Payments
+# --------------------------------------------------
+
+# Local development defaults to a fully local dummy gateway. Set
+# PAYMENT_GATEWAY=razorpay only when real Razorpay keys are configured safely.
+PAYMENT_GATEWAY = os.getenv("PAYMENT_GATEWAY", "dummy").lower()
 
 # --------------------------------------------------
 # AiSensy

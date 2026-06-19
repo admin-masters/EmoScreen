@@ -1,0 +1,141 @@
+{% extends "content/base.html" %}
+{% block content %}
+<section class="page-header">
+  <div class="page-eyebrow">Workflow audit</div>
+  <h1>{{ case.case_code }}</h1>
+  <p class="page-intro">{{ case.form_title|default:case.form_code }} for {{ case.patient_name|default:"patient" }}</p>
+</section>
+
+<section class="card">
+  <div class="badge-row">
+    <span class="status-pill {% if case.current_status == 'FAILED' %}status-pill--danger{% elif case.current_status == 'PAYMENT_PENDING' %}status-pill--info{% endif %}">{{ case.get_current_status_display }}</span>
+    <span class="pill">{{ case.get_form_family_display }}</span>
+    <span class="pill">{{ case.get_payment_status_display }}</span>
+  </div>
+  {% if case.failure_reason %}
+    <p class="alert alert-error"><strong>Failure:</strong> {{ case.failure_stage }} at {{ case.failed_at|date:"Y-m-d H:i" }}. {{ case.failure_reason }}</p>
+  {% endif %}
+  <div class="form-actions">
+    <a class="btn" href="{% url 'paid:workflow_dashboard' %}">Back to Dashboard</a>
+    {% if case.order and case.order.status != 'PAID' %}
+      <a class="btn btn-primary" href="{% url 'paid:patient_payment' case.order.order_code %}">Retry Payment</a>
+    {% endif %}
+    {% if case.order %}
+      <a class="btn" href="{% url 'paid:patient_form' case.order.order_code %}">Continue Form</a>
+      <a class="btn" href="{% url 'paid:patient_thank_you' case.order.order_code %}?refresh=1">Refresh Report</a>
+    {% endif %}
+  </div>
+</section>
+
+<section class="detail-grid">
+  <div class="card">
+    <div class="page-eyebrow">Doctor</div>
+    <h2>{{ case.doctor_name_snapshot|default:"-" }}</h2>
+    <p><strong>Code:</strong> {{ case.doctor.unique_doctor_code }}</p>
+    <p><strong>Email:</strong> {{ case.doctor.email|default:"-" }}</p>
+    {% if case.order %}
+      <p><strong>Order:</strong> <a href="{% url 'paid:order_detail' case.doctor.unique_doctor_code case.order.order_code %}">{{ case.order.order_code }}</a></p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <div class="page-eyebrow">Patient</div>
+    <h2>{{ case.patient_name|default:"-" }}</h2>
+    <p><strong>WhatsApp:</strong> {{ case.patient_whatsapp|default:"-" }}</p>
+    <p><strong>Email:</strong> {{ case.patient_email|default:"-" }}</p>
+    <p><strong>Completion:</strong> {{ case.completion_percent }}% ({{ case.completed_questions }}/{{ case.total_questions }})</p>
+  </div>
+  <div class="card">
+    <div class="page-eyebrow">Payment</div>
+    {% if payment %}
+      <h2>{{ payment.get_status_display }}</h2>
+      <p><strong>Required:</strong> {{ payment.is_required|yesno:"Yes,No" }}</p>
+      <p><strong>Amount:</strong> Rs. {{ case.amount_rupees|floatformat:2 }}</p>
+      <p><strong>Gateway:</strong> {{ payment.gateway|default:"-" }}</p>
+      <p><strong>Reference:</strong> {{ payment.reference_id|default:"-" }}</p>
+      <p><strong>Paid at:</strong> {{ payment.paid_at|date:"Y-m-d H:i"|default:"-" }}</p>
+      {% if payment.error_text %}<p><strong>Error:</strong> {{ payment.error_text }}</p>{% endif %}
+    {% else %}
+      <p>No payment record.</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <div class="page-eyebrow">Report</div>
+    {% if report_tracking %}
+      <h2>{{ report_tracking.get_status_display }}</h2>
+      <p><strong>Started:</strong> {{ report_tracking.generation_started_at|date:"Y-m-d H:i"|default:"-" }}</p>
+      <p><strong>Generated:</strong> {{ report_tracking.generated_at|date:"Y-m-d H:i"|default:"-" }}</p>
+      <p><strong>Patient delivery:</strong> {{ report_tracking.patient_delivery_status|default:"-" }}</p>
+      <p><strong>Doctor delivery:</strong> {{ report_tracking.doctor_delivery_status|default:"-" }}</p>
+      {% if report_tracking.error_text %}<p><strong>Error:</strong> {{ report_tracking.error_text }}</p>{% endif %}
+    {% else %}
+      <p>No report tracking record.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card table-card">
+  <div class="page-eyebrow">Timeline</div>
+  <h2>Immutable Event History</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Event</th>
+          <th>Stage</th>
+          <th>Status</th>
+          <th>Actor</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for event in events %}
+          <tr>
+            <td>{{ event.occurred_at|date:"Y-m-d H:i:s" }}</td>
+            <td>{{ event.event_type }}</td>
+            <td>{{ event.stage|default:"-" }}</td>
+            <td>{{ event.status_from|default:"-" }} -> {{ event.status_to|default:"-" }}</td>
+            <td>{{ event.actor_type }}<br><small>{{ event.actor_identifier|default:"system" }}</small></td>
+            <td>{{ event.message|default:"-" }}{% if event.failure_reason %}<br><strong>{{ event.failure_reason }}</strong>{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">No events recorded.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card table-card">
+  <div class="page-eyebrow">Delivery</div>
+  <h2>Delivery Attempts</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Channel</th>
+          <th>Recipient</th>
+          <th>Status</th>
+          <th>Provider</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for delivery in deliveries %}
+          <tr>
+            <td>{{ delivery.created_at|date:"Y-m-d H:i:s" }}</td>
+            <td>{{ delivery.get_channel_display }}</td>
+            <td>{{ delivery.recipient }}</td>
+            <td>{{ delivery.get_status_display }}</td>
+            <td>{{ delivery.provider|default:"-" }}</td>
+            <td>{{ delivery.error_text|default:"-" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">No delivery attempts recorded.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

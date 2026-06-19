@@ -1,0 +1,33 @@
+{% extends "content/base.html" %}
+{% block content %}
+<section class="page-header">
+  <div class="page-eyebrow">Paid Assessment</div>
+  <h1>Paid Orders</h1>
+</section>
+<div class="card">
+  {% if orders %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Order</th>
+            <th>Status</th>
+            <th>Patient</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in orders %}
+            <tr>
+              <td><a href="{% url 'paid:order_detail' doctor.unique_doctor_code order.order_code %}">{{ order.order_code }}</a></td>
+              <td>{{ order.status }}</td>
+              <td>{{ order.patient_name }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p>No paid orders yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

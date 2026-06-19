@@ -1,0 +1,12 @@
+{% extends "content/base.html" %}
+{% block content %}
+<section class="page-header">
+  <div class="page-eyebrow">Paid Assessment</div>
+  <h1>Order {{ order.order_code }}</h1>
+</section>
+<div class="card">
+  <p><strong>Status:</strong> <span class="status-pill status-pill--info">{{ order.status }}</span></p>
+  <p><strong>Patient:</strong> {{ order.patient_name }}</p>
+  <p><strong>Final Amount:</strong> ₹{{ final_amount_rupees|floatformat:2 }}</p>
+</div>
+{% endblock %}

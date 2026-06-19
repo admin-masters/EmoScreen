@@ -1,12 +1,15 @@
 {% extends "content/base.html" %}
 {% block content %}
-<h2>EmoScreen – Terms Of Use</h2>
+<section class="page-header">
+  <div class="page-eyebrow">Compliance</div>
+  <h1>EmoScreen Terms Of Use</h1>
+</section>
 
 {% if error %}
-  <div class="card" style="border-color:#ef4444;color:#b91c1c">{{ error }}</div>
+  <div class="card alert-error">{{ error }}</div>
 {% endif %}
 
-<div class="card" style="max-width:900px">
+<div class="card centered-card">
   <h3>For Doctors</h3>
   <p>EmoScreen is a screening service operated by Inditech Technology Services Private Limited and used by doctors.</p>
   <p>Doctors who use the service confirm that they have the right qualifications to practice medicine in India and that they are responsible for the advice, diagnosis, and treatment they give their patients.</p>
@@ -22,13 +25,15 @@
   <p>Patients understand that the educational content on the Platform comes from subject matter experts and is published "as-is". Inditech or SAPA are not responsible for its accuracy or relevance.</p>
   <p>The Platform and Services are offered "as is" and "as available" without any warranties or conditions and Indian laws apply to these Terms Of Use.</p>
 
-  <form method="post" style="margin-top:16px">
+  <form method="post">
     {% csrf_token %}
-    <label style="display:flex;align-items:center;gap:8px">
+    <label class="checkbox-row">
       <input type="checkbox" name="agree" required>
       <span>I have read and agree to the Terms and Conditions.</span>
     </label>
-    <button class="btn btn-green" type="submit" style="margin-top:12px">I Agree & Continue</button>
+    <div class="form-actions">
+      <button class="btn btn-green" type="submit">I Agree & Continue</button>
+    </div>
   </form>
 </div>
 {% endblock %}

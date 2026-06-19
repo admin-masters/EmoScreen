@@ -1,43 +1,84 @@
 {% extends "content/base.html" %}
 {% block content %}
 
-<h2>Register</h2>
+<section class="page-header">
+  <div class="page-eyebrow">Healthcare Platform</div>
+  <h1>Modern Screening for Pediatric Care</h1>
+  <p class="page-subtitle">EmoScreen supports trusted registration, guided patient screening, self-screening, QR distribution, and paid assessment workflows in one calm clinical interface.</p>
+</section>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="icon-badge" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+    <div class="stack-xs">
+      <div class="stat-value">8</div>
+      <div class="stat-label">Languages supported for parent screening</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="icon-badge icon-badge--blue" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 4v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V7l7-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="stack-xs">
+      <div class="stat-value">100%</div>
+      <div class="stat-label">Clinical workflows preserved with secure access flows</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="icon-badge" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 19h16M7 16V8m5 8V5m5 11v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+    <div class="stack-xs">
+      <div class="stat-value">2</div>
+      <div class="stat-label">Screening surfaces: legacy red-flag flow and paid assessments</div>
+    </div>
+  </div>
+</div>
 
 {% if request.user.is_staff %}
-  <div class="card">
+  <div class="card hero-panel">
+    <h3>Registration & Administration</h3>
+    <div class="inline-actions">
     <a class="btn" href="{% url 'content:register_pediatrician' %}">I am a Pediatrician</a>
-    <a class="btn" href="{% url 'content:register_caregiver' %}" style="margin-left:10px">I am a Caregiver</a>
-    <a class="btn" href="{% url 'content:bulk_doctor_upload' %}" style="margin-left:10px">Bulk Doctor CSV Upload</a>
-    <a class="btn" href="{% url 'content:reports_dashboard' %}" style="margin-left:10px">View Reports</a>
+    <a class="btn" href="{% url 'content:register_caregiver' %}">I am a Caregiver</a>
+    <a class="btn" href="{% url 'content:bulk_doctor_upload' %}">Bulk Doctor CSV Upload</a>
+    <a class="btn btn-green" href="{% url 'content:reports_dashboard' %}">View Reports</a>
+    </div>
   </div>
 
-  <div class="card" style="margin-top:16px">
+  <div class="card">
     <h3>Universal Access</h3>
     <p class="muted">Open the global start page or download the single QR that works for every clinic.</p>
-    <div style="display:flex; gap:10px; flex-wrap:wrap">
+    <div class="inline-actions">
       <a class="btn" href="{% url 'content:universal_entry' %}" target="_blank" rel="noopener">Visit /start/</a>
       <a class="btn" href="{% url 'content:global_qr_svg' %}?download=1">Download QR (/qr/global.svg)</a>
     </div>
   </div>
 {% else %}
-  <div class="card">
+  <div class="card hero-panel">
+    <h3>Register Your Practice</h3>
+    <div class="inline-actions">
     <a class="btn" href="{% url 'content:register_pediatrician' %}">I am a Pediatrician</a>
-    <a class="btn" href="{% url 'content:register_caregiver' %}" style="margin-left:10px">I am a Caregiver</a>
+    <a class="btn" href="{% url 'content:register_caregiver' %}">I am a Caregiver</a>
+    </div>
   </div>
 
-  <div class="card" style="margin-top:16px">
+  <div class="detail-grid">
+  <div class="card">
     <h3>Universal Patient Entry</h3>
     <p class="muted">A single link/QR that works for all clinics and patients.</p>
-    <div style="display:flex; gap:12px; flex-wrap:wrap">
+    <div class="inline-actions">
       <a class="btn" href="{% url 'content:global_start' %}" target="_blank" rel="noopener">Visit /start/</a>
       <a class="btn" href="{% url 'content:global_qr_svg' %}?download=1">Download Global QR (SVG)</a>
     </div>
   </div>
 
-  <div class="card" style="margin-top:16px">
+  <div class="card">
     <h3>Self Screening (No Doctor)</h3>
     <p class="muted">A single link/QR patients can use without a clinic.</p>
-    <div style="display:flex; gap:12px; flex-wrap:wrap">
+    <div class="inline-actions">
       <a class="btn" href="{% url 'content:self_start' %}" target="_blank" rel="noopener">
         Visit /start/self/
       </a>
@@ -46,7 +87,8 @@
       </a>
     </div>
   </div>
-  
+  </div>
+
 {% endif %}
 
 {% endblock %}

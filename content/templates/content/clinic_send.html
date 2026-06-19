@@ -1,43 +1,81 @@
 {% extends "content/base.html" %}
 
 {% block content %}
-<h2>Send Form to Parent</h2>
+<section class="page-header">
+  <div class="page-eyebrow">Clinic Console</div>
+  <h1>Send Form to Parent</h1>
+  <p class="page-subtitle">Share multilingual screening links or paid age-band forms with a calm, guided parent experience.</p>
+</section>
 
-<form method="post" class="card">
+<div class="grid-2">
+<form method="post" class="card form-card">
   {% csrf_token %}
   <label>Enter Parent's WhatsApp No.</label>
   {{ form.parent_whatsapp }}
+  <label>Select Form</label>
+  {{ form.share_form }}
   <label>Select Language</label>
-  {{ form.language }}
-  <div style="margin-top:10px">
+  <div id="language-wrap">{{ form.language }}</div>
+  <div id="paid-wrap" class="is-hidden">
+    <label>Patient Name (for paid form)</label>
+    {{ form.patient_name }}
+    <label>Paid Price</label>
+    {{ form.price_variant }}
+  </div>
+  <div class="form-actions">
     <button class="btn btn-green" type="submit">Send via WhatsApp</button>
   </div>
-  <p class="muted">We’ll open WhatsApp with a pre‑filled message in the selected language that contains the patient link.</p>
+  <p class="form-note">We’ll open WhatsApp with a pre-filled message in the selected language that contains the patient link.</p>
 </form>
 
-<div class="card" style="margin-bottom:16px">
-  <h3>Bulk Share (QR & Link)</h3>
-  <p class="muted">Patients can scan this QR or open the link to start the screening on their own.</p>
-  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-    <img src="{% url 'content:doctor_qr_svg' pro.unique_doctor_code %}" alt="Clinic QR"
-         style="width:180px;height:auto;border:1px solid #eee;padding:4px;background:#fff" />
+<div class="card hero-panel">
+  <div class="stack-sm">
+    <div class="page-eyebrow">Sharing Tools</div>
+    <h3>Bulk Share via QR or Direct Link</h3>
+    <p class="muted">Patients can scan the QR or open the link directly to start the screening journey on their own device.</p>
+  </div>
 
-    <div style="min-width:280px">
-      <div><strong>Share Link:</strong></div>
-      <div class="mono" style="word-break:break-all">{{ share_url }}</div>
+  <div class="qr-panel">
+    <div class="qr-art">
+      <img src="{% url 'content:doctor_qr_svg' pro.unique_doctor_code %}" alt="Clinic QR">
+    </div>
 
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn" type="button"
-                onclick="navigator.clipboard.writeText('{{ share_url }}')">Copy Link</button>
-        <a class="btn" href="{% url 'content:doctor_qr_svg' pro.unique_doctor_code %}?download=1">
-          Download QR
-        </a>
-        <a class="btn" target="_blank" rel="noopener"
-           href="{% url 'content:share_landing' pro.unique_doctor_code %}">Open</a>
+    <div class="stack-sm">
+      <div>
+        <strong>Share Link</strong>
+        <div class="mono break-all">{{ share_url }}</div>
+      </div>
+      <div class="inline-actions">
+        <button class="btn" type="button" data-copy-text="{{ share_url }}">Copy Link</button>
+        <a class="btn" href="{% url 'content:doctor_qr_svg' pro.unique_doctor_code %}?download=1">Download QR</a>
+        <a class="btn btn-green" target="_blank" rel="noopener" href="{% url 'content:share_landing' pro.unique_doctor_code %}">Open</a>
       </div>
     </div>
   </div>
 </div>
+</div>
 
-
+<script>
+  (function () {
+    const formSelect = document.getElementById("id_share_form");
+    const langWrap = document.getElementById("language-wrap");
+    const paidWrap = document.getElementById("paid-wrap");
+    const languageInput = document.getElementById("id_language");
+    const patientName = document.getElementById("id_patient_name");
+    const priceVariant = document.getElementById("id_price_variant");
+    function syncMode() {
+      const val = formSelect ? formSelect.value : "";
+      const isPaid = val.startsWith("P:");
+      langWrap.classList.toggle("is-hidden", isPaid);
+      paidWrap.classList.toggle("is-hidden", !isPaid);
+      if (languageInput) languageInput.required = !isPaid;
+      if (patientName) patientName.required = isPaid;
+      if (priceVariant) priceVariant.required = isPaid;
+    }
+    if (formSelect) {
+      formSelect.addEventListener("change", syncMode);
+      syncMode();
+    }
+  })();
+</script>
 {% endblock %}

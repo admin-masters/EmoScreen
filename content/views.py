@@ -55,6 +55,21 @@ from .utils import (
     make_verify_token, read_verify_token, last10_digits,clinic_valid_last10_set,get_public_professional   # <-- NEW imports
 )
 
+JOURNEY_LOCKED_CONTEXT = {"hide_journey_nav": True}
+
+
+def _clinic_link_path(code: str) -> str:
+    return f"/admin/bulk-upload/clinic/{code}/"
+
+
+def _completed_legacy_redirect(workflow_case):
+    """Prevent a verified free/self screening case from creating a second submission."""
+    if workflow_case and getattr(workflow_case, "legacy_submission_id", None):
+        return redirect(
+            reverse("content:view_result", args=[workflow_case.legacy_submission.report_code])
+        )
+    return None
+
 # ---------- Registration ----------
 
 def registration_choice(request):
@@ -69,7 +84,7 @@ def register_pediatrician(request):
             pro.role = "PEDIATRICIAN"
             pro.unique_doctor_code = generate_doctor_code()
             pro.save()
-            clinic_url = request.build_absolute_uri(reverse("content:clinic_send", args=[pro.unique_doctor_code]))
+            clinic_url = request.build_absolute_uri(_clinic_link_path(pro.unique_doctor_code))
             # NEW: send onboarding notifications (SendGrid + optional AiSensy)
             notify_registration(pro, clinic_url)
             return render(request, "content/registration_done.html", {"clinic_url": clinic_url, "pro": pro})
@@ -92,7 +107,7 @@ def register_caregiver(request):
                 pro.last_name = parts[1]
             pro.unique_doctor_code = generate_doctor_code()
             pro.save()
-            clinic_url = request.build_absolute_uri(reverse("content:clinic_send", args=[pro.unique_doctor_code]))
+            clinic_url = request.build_absolute_uri(_clinic_link_path(pro.unique_doctor_code))
             notify_registration(pro, clinic_url)
             return render(request, "content/registration_done.html", {"clinic_url": clinic_url, "pro": pro})
     else:
@@ -131,6 +146,7 @@ def clinic_send(request, code):
                 "current_email": user_email or "(not signed in with Google email)",
                 "retry_url": relogin_url,
                 "clinic_url": request.get_full_path(),
+                **JOURNEY_LOCKED_CONTEXT,
                 **white_label_context(pro),
             },
         )
@@ -144,11 +160,93 @@ def clinic_send(request, code):
 
     langs = list(Language.objects.all())
     lang_choices = [(l.lang_code, l.lang_name_english) for l in langs]
+    paid_choices = []
+    try:
+        from paid.models import EsCfgForm
+
+        paid_choices = [
+            (f"P:{f.form_code}", f"Paid: {f.title}")
+            for f in EsCfgForm.objects.filter(is_active=True).order_by("age_min_months", "title")
+        ]
+    except Exception:
+        paid_choices = []
+
+    behavioral_choices = [("B:behavioral", "Behavioral: Behavioral and Emotional Red Flags")]
+    form_choices = behavioral_choices + paid_choices
 
     if request.method == "POST":
-        form = ClinicSendForm(request.POST, lang_choices=lang_choices)
+        form = ClinicSendForm(request.POST, lang_choices=lang_choices, form_choices=form_choices)
         if form.is_valid():
             parent_phone = form.cleaned_data["parent_whatsapp"]
+            selected_form = form.cleaned_data["share_form"]
+
+            if selected_form.startswith("P:"):
+                from paid.models import EsCfgForm, EsPayOrder
+                from paid.services.tokens import build_order_token_payload, hash_token, sign_payload
+
+                price_map = {
+                    "INR_499": 49900,
+                    "INR_100": 10000,
+                    "INR_20": 2000,
+                    "INR_1": 100,
+                    "INR_0": 0,
+                }
+                form_code = selected_form.split(":", 1)[1]
+                paid_form = get_object_or_404(EsCfgForm, form_code=form_code, is_active=True)
+                price_variant = form.cleaned_data.get("price_variant") or "INR_0"
+                final_amount = price_map.get(price_variant, 0)
+
+                order_code = generate_doctor_code().upper()
+                order = EsPayOrder.objects.create(
+                    order_code=order_code,
+                    doctor=pro,
+                    form=paid_form,
+                    price_variant=price_variant,
+                    base_amount_paise=final_amount,
+                    discount_paise=0,
+                    final_amount_paise=final_amount,
+                    patient_name=form.cleaned_data.get("patient_name") or "Patient",
+                    patient_whatsapp=normalize_phone(parent_phone),
+                    patient_email=None,
+                    status=EsPayOrder.Status.PAYMENT_SKIPPED if final_amount == 0 else EsPayOrder.Status.PAYMENT_PENDING,
+                    link_token_hash="pending",
+                    link_expires_at=timezone.now() + timedelta(days=7),
+                    created_ip=request.META.get("REMOTE_ADDR"),
+                    user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                )
+                payload = build_order_token_payload(order, code)
+                token = sign_payload(payload)
+                order.link_token_hash = hash_token(token)
+                order.status = EsPayOrder.Status.LINK_SENT
+                order.save(update_fields=["link_token_hash", "status", "updated_at"])
+
+                paid_link = request.build_absolute_uri(
+                    reverse(
+                        "paid:patient_entry",
+                        args=[order.order_code, code, paid_form.form_code, order.final_amount_paise, token],
+                    )
+                )
+                try:
+                    from paid.services import audit
+                    audit.create_paid_case(
+                        order=order,
+                        request=request,
+                        token=token,
+                        source="clinic_send",
+                        delivery_url=paid_link,
+                    )
+                except Exception as exc:
+                    print("Workflow audit error (paid clinic_send):", exc)
+                msg = (
+                    "Dear Parents,\n\n"
+                    f"I’m prescribing Emo Screen tool – {paid_form.title}.\n\n"
+                    "To complete your order,\n"
+                    "CLICK HERE\n\n"
+                    f"{paid_link}\n\n"
+                    "For any further queries or support, please send a WhatsApp message to +91-8297634553."
+                )
+                return redirect(whatsapp_link(parent_phone, msg))
+
             lang = form.cleaned_data["language"]
 
             # NEW: verification link with signed token (instead of direct language page)
@@ -157,15 +255,28 @@ def clinic_send(request, code):
                 reverse("content:verify_phone", args=[code, token])
             )
             verify_link += f"?lang={lang}"
+            try:
+                from paid.services import audit
+                audit.create_legacy_case(
+                    doctor=pro,
+                    patient_whatsapp=parent_phone,
+                    language=lang,
+                    request=request,
+                    token=token,
+                    source="clinic_send",
+                    delivery_url=verify_link,
+                )
+            except Exception as exc:
+                print("Workflow audit error (legacy clinic_send):", exc)
             # Keep existing language-specific message templates:
             msg = parent_message(lang, verify_link)
 
             wa_url = whatsapp_link(parent_phone, msg)
             return redirect(wa_url)
     else:
-        form = ClinicSendForm(lang_choices=lang_choices)
+        form = ClinicSendForm(lang_choices=lang_choices, form_choices=form_choices)
     share_url = request.build_absolute_uri(reverse("content:share_landing", args=[code]))
-    ctx = {"form": form, "pro": pro, "share_url": share_url, **white_label_context(pro)}
+    ctx = {"form": form, "pro": pro, "share_url": share_url, **JOURNEY_LOCKED_CONTEXT, **white_label_context(pro)}
     return render(request, "content/clinic_send.html", ctx)
 # content/views.py
 from django.contrib.auth import logout
@@ -193,6 +304,7 @@ def _gate_google_and_email(request, pro, target_after_auth):
                 "current_email": user_email or "(not signed in with Google email)",
                 "retry_url": relogin_url,
                 "clinic_url": target_after_auth,
+                **JOURNEY_LOCKED_CONTEXT,
                 **white_label_context(pro),
             },
         )
@@ -222,7 +334,7 @@ def terms_accept(request, code):
             pro.save(update_fields=["terms_accepted_at", "terms_version"])
             return redirect(next_url)
 
-    ctx = {"pro": pro, "error": error, **white_label_context(pro)}
+    ctx = {"pro": pro, "error": error, **JOURNEY_LOCKED_CONTEXT, **white_label_context(pro)}
     return render(request, "content/terms_accept.html", ctx)
 # content/views.py
 def terms_public(request):
@@ -258,6 +370,7 @@ def auth_complete(request):
                 "current_email": actual or "(no email)",
                 "retry_url": reverse("social:begin", args=["google-oauth2"]) + "?next=" + reverse("content:auth_complete"),
                 "clinic_url": next_url,
+                **JOURNEY_LOCKED_CONTEXT,
             },
         )
     # OK -> go back to clinic page
@@ -293,21 +406,43 @@ def verify_phone(request, code, token):
         if token_code != code:
             raise BadSignature("Code mismatch")
         ui = get_ui_labels(lang)
+        workflow_case = None
+        try:
+            from paid.services import audit
+            workflow_case = audit.case_for_token(token)
+            if workflow_case:
+                audit.mark_opened(workflow_case, request=request, message="Verification link opened")
+                request.session[f"workflow_case_{code}"] = workflow_case.case_code
+        except Exception as exc:
+            print("Workflow audit error (verify open):", exc)
     except (BadSignature, SignatureExpired):
         ui = get_ui_labels(lang_from_qs)
         ctx = {
             "pro": pro,
             "ui": ui,
             "error": ui["verify_error_link_invalid"],
+            **JOURNEY_LOCKED_CONTEXT,
             **white_label_context(pro),
         }
         return render(request, "content/verify_phone.html", ctx)
+
+    completed_response = _completed_legacy_redirect(workflow_case)
+    if completed_response:
+        return completed_response
 
     error = ""
     if request.method == "POST":
         entered = request.POST.get("parent_phone", "")
         if last10_digits(entered) == expected_last10:
             request.session[f"phone_verified_{code}"] = True
+            try:
+                from paid.services import audit
+                workflow_case = workflow_case or audit.case_for_token(token)
+                if workflow_case:
+                    audit.mark_verified(workflow_case, request=request)
+                    request.session[f"workflow_case_{code}"] = workflow_case.case_code
+            except Exception as exc:
+                print("Workflow audit error (verify success):", exc)
             return redirect(reverse("content:parent_language_select", args=[code]))
         else:
             error = ui["verify_error_mismatch"]
@@ -317,6 +452,7 @@ def verify_phone(request, code, token):
         "ui": ui,
         "lang": lang,
         "error": error,
+        **JOURNEY_LOCKED_CONTEXT,
         **white_label_context(pro),
     }
     return render(request, "content/verify_phone.html", ctx)
@@ -331,11 +467,19 @@ def parent_language_select(request, code):
         return render(
             request,
             "content/verify_required.html",
-            {"pro": pro, **white_label_context(pro)}
+            {"pro": pro, **JOURNEY_LOCKED_CONTEXT, **white_label_context(pro)}
         )
 
+    try:
+        from paid.services import audit
+        completed_response = _completed_legacy_redirect(audit.get_session_case(request, code))
+        if completed_response:
+            return completed_response
+    except Exception as exc:
+        print("Workflow audit error (language one-time guard):", exc)
+
     languages = Language.objects.all()
-    ctx = {"pro": pro, "languages": languages, **white_label_context(pro)}
+    ctx = {"pro": pro, "languages": languages, **JOURNEY_LOCKED_CONTEXT, **white_label_context(pro)}
     return render(request, "content/parent_language_select.html", ctx)
 
 def _build_screening_form(lang_code):
@@ -427,6 +571,21 @@ def screening_form(request, code, lang):
     # NEW: Form title and purpose
     form_title = ui_text("FORM_TITLE", lang, "Behavioral & Emotional Red Flags – Pre-consultation form")
     form_purpose = ui_text("FORM_PURPOSE", lang, "")  # Optional
+    workflow_case = None
+    try:
+        from paid.services import audit
+        workflow_case = audit.get_session_case(request, code)
+        if workflow_case and workflow_case.language != lang:
+            workflow_case.language = lang
+            workflow_case.save(update_fields=["language", "updated_at"])
+        if request.method == "GET" and workflow_case:
+            audit.mark_in_progress(workflow_case, request=request, completed=0, total=len(fields))
+    except Exception as exc:
+        print("Workflow audit error (screen open):", exc)
+
+    completed_response = _completed_legacy_redirect(workflow_case)
+    if completed_response:
+        return completed_response
 
     if request.method == "POST":
         missing = [k for k in required_demographics if not request.POST.get(k)]
@@ -440,6 +599,7 @@ def screening_form(request, code, lang):
                 "ui": ui,
                 "form_title": form_title,
                 "form_purpose": form_purpose,
+                **JOURNEY_LOCKED_CONTEXT,
                 **white_label_context(pro),
             }
             return render(request, "content/screening_form.html", ctx)
@@ -458,11 +618,32 @@ def screening_form(request, code, lang):
                 "ui": ui,
                 "form_title": form_title,
                 "form_purpose": form_purpose,
+                **JOURNEY_LOCKED_CONTEXT,
                 **white_label_context(pro)
             }
             return render(request, "content/screening_form.html", ctx)
 
         selected_option_codes = [request.POST.get(f["question_code"]) for f in fields]
+        try:
+            from paid.services import audit
+            if not workflow_case:
+                workflow_case = audit.create_legacy_case(
+                    doctor=pro,
+                    patient_whatsapp=parent_phone,
+                    language=lang,
+                    request=request,
+                    patient_name=patient_name,
+                    patient_email=patient_email,
+                    source="direct_screening_form",
+                )
+            audit.mark_in_progress(
+                workflow_case,
+                request=request,
+                completed=len([x for x in selected_option_codes if x]),
+                total=len(fields),
+            )
+        except Exception as exc:
+            print("Workflow audit error (screen progress):", exc)
         options = list(Option.objects.filter(option_code__in=selected_option_codes))
 
         flags = []
@@ -545,6 +726,43 @@ def screening_form(request, code, lang):
         # ----------------------------------------------------
         # END NEW BRANCH
         # ----------------------------------------------------
+        try:
+            from paid.services import audit
+            if workflow_case:
+                audit.attach_legacy_submission(
+                    workflow_case,
+                    submission,
+                    patient_name=patient_name,
+                    patient_email=patient_email,
+                )
+                audit.mark_report_sent(
+                    workflow_case,
+                    to_patient=True,
+                    to_doctor=(pro.unique_doctor_code != public_code and flags_count > 0),
+                    patient_status="SENT" if settings.SENDGRID_API_KEY else "SIMULATED",
+                    doctor_status="SENT" if settings.SENDGRID_API_KEY else "SIMULATED",
+                )
+                audit.record_delivery(
+                    workflow_case,
+                    channel="EMAIL",
+                    recipient=patient_email,
+                    subject="Your EmoScreen Report",
+                    status="SENT" if settings.SENDGRID_API_KEY else "SIMULATED",
+                    provider="sendgrid" if settings.SENDGRID_API_KEY else "local-email-backend",
+                    metadata={"email_type": "LEGACY_PATIENT_REPORT", "report_code": report_code},
+                )
+                if pro.unique_doctor_code != public_code and flags_count > 0:
+                    audit.record_delivery(
+                        workflow_case,
+                        channel="EMAIL",
+                        recipient=pro.email,
+                        subject=f"Red Flags report for {patient_name or 'patient'}",
+                        status="SENT" if settings.SENDGRID_API_KEY else "SIMULATED",
+                        provider="sendgrid" if settings.SENDGRID_API_KEY else "local-email-backend",
+                        metadata={"email_type": "LEGACY_DOCTOR_REPORT", "report_code": report_code},
+                    )
+        except Exception as exc:
+            print("Workflow audit error (screen submit):", exc)
 
         tel_digits, wa_digits = clinic_contact_numbers(pro)
         call_link = f"tel:{tel_digits}" if (flags_count > 0 and tel_digits) else ""
@@ -587,6 +805,7 @@ def screening_form(request, code, lang):
             "wa_link": wa_link,
             "pro": pro,
             "is_self_screen": is_self_screen,
+            **JOURNEY_LOCKED_CONTEXT,
             **white_label_context(pro),
         }
         return render(request, "content/result.html", ctx)
@@ -599,6 +818,7 @@ def screening_form(request, code, lang):
         "ui": ui,
         "form_title": form_title,
         "form_purpose": form_purpose,
+        **JOURNEY_LOCKED_CONTEXT,
         **white_label_context(pro),
     }
     return render(request, "content/screening_form.html", ctx)
@@ -817,6 +1037,7 @@ def view_result(request, report_code):
 
 
     ctx = {"report_code": report_code, "rf_labels": rf_labels, "education_links": education_links, "pro": pro,
+           **JOURNEY_LOCKED_CONTEXT,
            **white_label_context(pro)}
     return render(request, "content/result_readonly.html", ctx)
 
@@ -931,7 +1152,7 @@ def _row_duplicate_exists(whatsapp_10: str, email: str) -> bool:
     ).exists()
 
 def _make_clinic_url(request, code: str) -> str:
-    return request.build_absolute_uri(reverse("content:clinic_send", args=[code]))
+    return request.build_absolute_uri(_clinic_link_path(code))
 
 def _write_result_csv(rows: list, file_path: str):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -949,7 +1170,7 @@ def bulk_doctor_upload(request):
     """
     from .utils import normalize_phone, generate_doctor_code, notify_registration
 
-    ctx = {"form": None}
+    ctx = {"form": None, **JOURNEY_LOCKED_CONTEXT}
 
     if request.method == "POST":
         form = BulkDoctorUploadForm(request.POST, request.FILES)
@@ -980,7 +1201,8 @@ def bulk_doctor_upload(request):
                     "form": form,
                     "summary": {"success": 0, "skipped": 0, "failed": 0},
                     "rows": [],
-                    "error": "CSV has more than 100 rows. Please split and upload again."
+                    "error": "CSV has more than 100 rows. Please split and upload again.",
+                    **JOURNEY_LOCKED_CONTEXT,
                 })
 
             results = []
@@ -1370,6 +1592,7 @@ def reports_dashboard(request):
         "detail": category,
         "detail_headers": detail_headers,
         "detail_rows": detail_rows,
+        **JOURNEY_LOCKED_CONTEXT,
     }
     return render(request, "content/admin_reports.html", ctx)
 
@@ -1434,9 +1657,21 @@ def share_landing(request, code):
         if not error:
             # Mark this browser/session as verified for this doctor
             request.session[f"phone_verified_{code}"] = True
+            try:
+                from paid.services import audit
+                workflow_case = audit.create_legacy_case(
+                    doctor=pro,
+                    patient_whatsapp=parent_phone,
+                    request=request,
+                    source="share_landing",
+                )
+                audit.mark_opened(workflow_case, request=request, message="Clinic share landing verified")
+                audit.mark_verified(workflow_case, request=request)
+            except Exception as exc:
+                print("Workflow audit error (share_landing):", exc)
             return redirect(reverse("content:parent_language_select", args=[code]))
 
-    ctx = {"pro": pro, "error": error, **white_label_context(pro)}
+    ctx = {"pro": pro, "error": error, **JOURNEY_LOCKED_CONTEXT, **white_label_context(pro)}
     return render(request, "content/share_landing.html", ctx)
 
 def doctor_qr_svg(request, code):
@@ -1508,9 +1743,21 @@ def global_start(request):
         #  Skip verify page – use the exact same session flag your guard checks.
         request.session[f"phone_verified_{code}"] = True
         request.session[f"parent_phone_{code}"] = "91" + p10  # optional to show masked number later
+        try:
+            from paid.services import audit
+            workflow_case = audit.create_legacy_case(
+                doctor=pro,
+                patient_whatsapp=parent_phone,
+                request=request,
+                source="global_start",
+            )
+            audit.mark_opened(workflow_case, request=request, message="Global start verified")
+            audit.mark_verified(workflow_case, request=request)
+        except Exception as exc:
+            print("Workflow audit error (global_start):", exc)
         return redirect(reverse("content:parent_language_select", args=[code]))
 
-    return render(request, "content/global_start.html", {"error": error})
+    return render(request, "content/global_start.html", {"error": error, **JOURNEY_LOCKED_CONTEXT})
 
 @require_http_methods(["GET"])
 def global_qr_svg(request):
@@ -1576,11 +1823,24 @@ def universal_entry(request):
             request.session[f"phone_verified_{code}"] = True
             # (Optional) store last-10 if you want to prefill the form's phone field later:
             request.session[f"parent_last10_{code}"] = p10
+            try:
+                from paid.services import audit
+                workflow_case = audit.create_legacy_case(
+                    doctor=pro,
+                    patient_whatsapp=parent_phone,
+                    request=request,
+                    source="universal_entry",
+                )
+                audit.mark_opened(workflow_case, request=request, message="Universal entry verified")
+                audit.mark_verified(workflow_case, request=request)
+            except Exception as exc:
+                print("Workflow audit error (universal_entry):", exc)
             return redirect(reverse("content:parent_language_select", args=[code]))
 
     return render(request, "content/universal_entry.html", {
         "error": error,
         "doctor_code_prefill": code_prefill,
+        **JOURNEY_LOCKED_CONTEXT,
     })
 
 def self_qr_svg(request):
@@ -1611,6 +1871,18 @@ def self_start(request):
             code = pro.unique_doctor_code
             request.session[f"phone_verified_{code}"] = True
             request.session[f"parent_last10_{code}"] = msisdn  # optional prefill
+            try:
+                from paid.services import audit
+                workflow_case = audit.create_legacy_case(
+                    doctor=pro,
+                    patient_whatsapp=msisdn,
+                    request=request,
+                    source="self_start",
+                )
+                audit.mark_opened(workflow_case, request=request, message="Self-screen start verified")
+                audit.mark_verified(workflow_case, request=request)
+            except Exception as exc:
+                print("Workflow audit error (self_start):", exc)
             return redirect(reverse("content:parent_language_select", args=[code]))
 
-    return render(request, "content/self_start.html", {"error": error})
+    return render(request, "content/self_start.html", {"error": error, **JOURNEY_LOCKED_CONTEXT})

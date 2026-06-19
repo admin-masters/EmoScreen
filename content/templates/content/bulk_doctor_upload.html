@@ -1,9 +1,13 @@
 {% extends "content/base.html" %}
 {% load static %}
 {% block content %}
-<h2>Bulk Doctor Registration (CSV)</h2>
+<section class="page-header">
+  <div class="page-eyebrow">Operations</div>
+  <h1>Bulk Doctor Registration</h1>
+  <p class="page-subtitle">Upload structured clinician data in CSV format and register providers in a faster, controlled workflow.</p>
+</section>
 
-<div class="card" style="background:#f8fafc">
+<div class="card surface-card--subtle">
   <p><strong>Required headers:</strong> Doctor Name, WhatsApp Number, Email ID, Doctor’s IMC Registration Number</p>
   <p><strong>Optional headers:</strong> Clinic Appointment Booking Number, Clinic Address with Postal Code, State, District, Receptionist WhatsApp Number, Receptionist Email ID, Doctor’s Photo</p>
   <p>Max 100 data rows per upload. WhatsApp numbers must be exactly 10 digits; we’ll add country code <code>91</code> for messaging.</p>
@@ -11,7 +15,7 @@
 " download>Sample Doctor CSV</a></p>
 </div>
 
-<form method="post" enctype="multipart/form-data" class="card">
+<form method="post" enctype="multipart/form-data" class="card form-card centered-card">
   {% csrf_token %}
   {{ form.as_p }}
   <button class="btn btn-green" type="submit">Start</button>
@@ -20,7 +24,7 @@
 {% if summary %}
 <div class="card">
   <h3>Summary</h3>
-  <ul>
+  <ul class="summary-list">
     <li>Successful: {{ summary.success }}</li>
     <li>Skipped (duplicates): {{ summary.skipped }}</li>
     <li>Failed (validation): {{ summary.failed }}</li>
@@ -33,30 +37,32 @@
 {% if rows %}
   <div class="card">
     <h3>Detail</h3>
-    <table style="width:100%; border-collapse:collapse">
-      <thead>
-        <tr>
-          <th style="text-align:left;border-bottom:1px solid #ddd">#</th>
-          <th style="text-align:left;border-bottom:1px solid #ddd">Doctor</th>
-          <th style="text-align:left;border-bottom:1px solid #ddd">WhatsApp</th>
-          <th style="text-align:left;border-bottom:1px solid #ddd">Email</th>
-          <th style="text-align:left;border-bottom:1px solid #ddd">Status</th>
-          <th style="text-align:left;border-bottom:1px solid #ddd">Message</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in rows %}
-        <tr>
-          <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">{{ r.idx }}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">{{ r.name }}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">{{ r.whatsapp }}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">{{ r.email }}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">{{ r.status }}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">{{ r.message }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Doctor</th>
+            <th>WhatsApp</th>
+            <th>Email</th>
+            <th>Status</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.idx }}</td>
+            <td>{{ r.name }}</td>
+            <td>{{ r.whatsapp }}</td>
+            <td>{{ r.email }}</td>
+            <td>{{ r.status }}</td>
+            <td>{{ r.message }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 {% endif %}
 {% endif %}

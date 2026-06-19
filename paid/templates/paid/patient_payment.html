@@ -1,0 +1,88 @@
+{% extends "content/base.html" %}
+{% block content %}
+<section class="page-header text-center narrow-shell center-shell">
+  <div class="page-eyebrow center-shell">Payment</div>
+  <h1>Complete Payment</h1>
+</section>
+<div class="card">
+  <p><strong>Amount:</strong> ₹{{ final_amount_rupees|floatformat:2 }}</p>
+  {% if payment_error %}
+    <p class="alert alert-error"><strong>{{ payment_error }}</strong></p>
+  {% endif %}
+
+  {% if dummy_gateway %}
+    <div class="alert alert-info">
+      Local dummy payment mode is enabled. No Razorpay keys, live gateway calls, or real money are used.
+    </div>
+    <form method="post" class="form-actions">
+      {% csrf_token %}
+      <input type="hidden" name="dummy_payment_action" value="success">
+      <button class="btn btn-primary" type="submit">Complete Dummy Payment</button>
+    </form>
+    <form method="post" class="form-actions">
+      {% csrf_token %}
+      <input type="hidden" name="dummy_payment_action" value="fail">
+      <button class="btn" type="submit">Simulate Failure</button>
+    </form>
+    <p class="muted">Local reference: {{ gateway_order_id }}</p>
+  {% else %}
+    <form id="payment-result-form" method="post" class="is-hidden">
+      {% csrf_token %}
+      <input type="hidden" name="razorpay_payment_id" id="razorpay_payment_id">
+      <input type="hidden" name="razorpay_order_id" id="razorpay_order_id">
+      <input type="hidden" name="razorpay_signature" id="razorpay_signature">
+    </form>
+
+    <button class="btn btn-green" id="pay-now" type="button">Pay Now</button>
+    <p class="muted">Secure checkout powered by Razorpay.</p>
+  {% endif %}
+</div>
+
+{% if not dummy_gateway %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+  (function () {
+    const btn = document.getElementById("pay-now");
+    const resultForm = document.getElementById("payment-result-form");
+    if (!btn || !window.Razorpay || !resultForm) return;
+
+    btn.addEventListener("click", function () {
+      const options = {
+        key: "{{ razorpay_key_id|escapejs }}",
+        amount: "{{ order.final_amount_paise }}",
+        currency: "INR",
+        name: "EmoScreen",
+        description: "EmoScreen Assessment",
+        order_id: "{{ gateway_order_id|escapejs }}",
+        prefill: {
+          name: "{{ order.patient_name|default:''|escapejs }}",
+          email: "{{ order.patient_email|default:''|escapejs }}",
+          contact: "{{ order.patient_whatsapp|default:''|escapejs }}"
+        },
+        notes: {
+          order_code: "{{ order.order_code|escapejs }}"
+        },
+        theme: { color: "#2AA7A1" },
+        handler: function (response) {
+          document.getElementById("razorpay_payment_id").value = response.razorpay_payment_id || "";
+          document.getElementById("razorpay_order_id").value = response.razorpay_order_id || "";
+          document.getElementById("razorpay_signature").value = response.razorpay_signature || "";
+          resultForm.submit();
+        },
+        modal: {
+          ondismiss: function () {
+            console.log("Payment popup closed");
+          }
+        }
+      };
+
+      const rzp = new Razorpay(options);
+      rzp.on("payment.failed", function () {
+        alert("Payment failed. Please retry.");
+      });
+      rzp.open();
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

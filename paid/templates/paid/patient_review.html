@@ -1,0 +1,21 @@
+{% extends "content/base.html" %}
+{% block content %}
+<section class="page-header">
+  <div class="page-eyebrow">Review</div>
+  <h1>Review Your Answers</h1>
+</section>
+<div class="card">
+  <ul class="list-clean review-list">
+    {% for row in review_rows %}
+      <li><strong>{{ row.question_text }}</strong>: {{ row.answer_text|default:"-" }}</li>
+    {% endfor %}
+  </ul>
+  <form method="post" action="{% url 'paid:patient_submit_final' order.order_code %}">
+    {% csrf_token %}
+    <div class="form-actions">
+      <button class="btn btn-green" type="submit">Submit Final</button>
+      <a class="btn" href="{% url 'paid:patient_form' order.order_code %}">Edit Answers</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

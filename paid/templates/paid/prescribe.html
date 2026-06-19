@@ -1,0 +1,12 @@
+{% extends "content/base.html" %}
+{% block content %}
+<section class="page-header">
+  <div class="page-eyebrow">Paid Assessment</div>
+  <h1>Paid Prescription</h1>
+</section>
+<form method="post" class="card form-card centered-card">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button class="btn btn-green" type="submit">Create</button>
+</form>
+{% endblock %}

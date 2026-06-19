@@ -1,0 +1,15 @@
+{% extends "content/base.html" %}
+{% block content %}
+<section class="page-header">
+  <div class="page-eyebrow">Paid Assessment</div>
+  <h1>Prescription Created</h1>
+</section>
+<div class="card">
+  <p><strong>Order:</strong> {{ order.order_code }}</p>
+  <p><strong>Final Amount:</strong> ₹{{ final_amount_rupees|floatformat:2 }}</p>
+  <p><strong>Form Link:</strong> <a href="{{ form_link }}">{{ form_link }}</a></p>
+  <p><a class="btn btn-green" href="{{ wa_link }}">Open WhatsApp</a></p>
+  <label>Message Preview</label>
+  <textarea rows="8" readonly>{{ message }}</textarea>
+</div>
+{% endblock %}

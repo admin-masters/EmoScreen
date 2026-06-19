@@ -1,8 +1,12 @@
 {% extends "content/base.html" %}
 {% block content %}
-<h2>Registration Completed</h2>
-<div class="card">
-  <p>Your clinic link is:</p>
+<section class="page-header text-center narrow-shell center-shell">
+  <div class="page-eyebrow center-shell">Completed</div>
+  <h1>Registration Completed</h1>
+  <p class="page-subtitle center-shell">Your clinical workspace is ready. Use the secure clinic link below to begin sharing forms.</p>
+</section>
+<div class="card centered-card text-center">
+  <p><strong>Your clinic link</strong></p>
   <p><a href="{{ clinic_url }}">{{ clinic_url }}</a></p>
 </div>
 {% endblock %}
