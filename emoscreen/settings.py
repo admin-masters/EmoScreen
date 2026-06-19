@@ -175,6 +175,21 @@ SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 # PAYMENT_GATEWAY=razorpay only when real Razorpay keys are configured safely.
 PAYMENT_GATEWAY = os.getenv("PAYMENT_GATEWAY", "dummy").lower()
 
+RAZORPAY_LIVE_MODE = os.getenv("RAZORPAY_LIVE_MODE", "false").lower() == "true"
+
+RAZORPAY_KEY_ID_TEST = os.getenv("RAZORPAY_KEY_ID_TEST", "")
+RAZORPAY_KEY_SECRET_TEST = os.getenv("RAZORPAY_KEY_SECRET_TEST", "")
+RAZORPAY_WEBHOOK_SECRET_TEST = os.getenv("RAZORPAY_WEBHOOK_SECRET_TEST", "")
+
+RAZORPAY_KEY_ID_LIVE = os.getenv("RAZORPAY_KEY_ID_LIVE", "")
+RAZORPAY_KEY_SECRET_LIVE = os.getenv("RAZORPAY_KEY_SECRET_LIVE", "")
+RAZORPAY_WEBHOOK_SECRET_LIVE = os.getenv("RAZORPAY_WEBHOOK_SECRET_LIVE", "")
+
+# Backward-compatible aliases if a single-mode deployment uses generic names.
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+
 # --------------------------------------------------
 # AiSensy
 # --------------------------------------------------

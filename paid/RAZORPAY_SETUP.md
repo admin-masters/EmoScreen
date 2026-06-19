@@ -77,7 +77,8 @@ The following are stored/updated:
 
 1. Go to Razorpay Dashboard → Webhooks.
 2. Add webhook URL:
-   - `https://<your-domain>/payments/razorpay/webhook/`
+   - Staging test mode: `https://emo.stage.cpdinclinic.co.in/payments/razorpay/webhook/`
+   - Production live mode: `https://emo.cpdinclinic.co.in/payments/razorpay/webhook/`
 3. Subscribe at least to:
    - `payment.captured`
    - `payment.failed`
@@ -89,8 +90,11 @@ The following are stored/updated:
 ## Testing in Razorpay test mode
 
 1. Set:
+   - `PAYMENT_GATEWAY=razorpay`
    - `RAZORPAY_LIVE_MODE=False`
-   - test keys/secrets
+   - `RAZORPAY_KEY_ID_TEST=<test_key_id>`
+   - `RAZORPAY_KEY_SECRET_TEST=<test_key_secret>`
+   - `RAZORPAY_WEBHOOK_SECRET_TEST=<same_secret_entered_in_razorpay_webhook>`
 2. Start payment flow from a paid order.
 3. Use Razorpay test card(s), e.g.:
    - Card: `4111 1111 1111 1111`
