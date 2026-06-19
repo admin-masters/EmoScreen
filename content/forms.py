@@ -122,15 +122,16 @@ class CaregiverForm(forms.ModelForm):
 
 
 class ClinicSendForm(forms.Form):
+    share_form = forms.ChoiceField(choices=[], label="Select Form")
     parent_whatsapp = forms.CharField(
         label="Enter Parent's WhatsApp No.",
         max_length=20
     )
-    language = forms.ChoiceField(choices=[], label="Select Language")
-    share_form = forms.ChoiceField(choices=[], label="Select Form")
+    language = forms.ChoiceField(choices=[], label="Select Language", required=False)
     patient_name = forms.CharField(label="Patient Name (for paid form)", max_length=255, required=False)
+    patient_email = forms.EmailField(label="Patient Email (for paid report)", required=False)
     price_variant = forms.ChoiceField(
-        label="Paid Price",
+        label="Payment Amount",
         required=False,
         choices=[
             ("INR_499", "₹499"),
@@ -148,9 +149,31 @@ class ClinicSendForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.fields["language"].choices = lang_choices
         self.fields["share_form"].choices = form_choices
+        self.fields["share_form"].widget.attrs.update({"data-share-form-select": "true"})
+        self.fields["patient_name"].widget.attrs.update({"placeholder": "Child / patient name"})
+        self.fields["parent_whatsapp"].widget.attrs.update({"placeholder": "10-digit parent WhatsApp number"})
+        self.fields["patient_email"].widget.attrs.update({"placeholder": "parent@example.com"})
 
     def clean_parent_whatsapp(self):
         return normalize_phone(self.cleaned_data["parent_whatsapp"])
+
+    def clean(self):
+        data = super().clean()
+        selected_form = data.get("share_form") or ""
+        if not selected_form:
+            return data
+
+        is_paid = selected_form.startswith("P:")
+
+        if is_paid:
+            if not data.get("patient_name"):
+                self.add_error("patient_name", "Patient name is required for paid forms.")
+            if not data.get("patient_email"):
+                self.add_error("patient_email", "Patient email is required for paid reports.")
+        elif not data.get("language"):
+            self.add_error("language", "Please select a language for the free screening form.")
+
+        return data
 
 
 class BulkDoctorUploadForm(forms.Form):

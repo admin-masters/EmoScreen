@@ -8,20 +8,55 @@
 </section>
 
 <div class="grid-2">
-<form method="post" class="card form-card">
+<form method="post" class="card form-card clinic-share-form" data-clinic-share-form>
   {% csrf_token %}
-  <label>Enter Parent's WhatsApp No.</label>
-  {{ form.parent_whatsapp }}
-  <label>Select Form</label>
-  {{ form.share_form }}
-  <label>Select Language</label>
-  <div id="language-wrap">{{ form.language }}</div>
-  <div id="paid-wrap" class="is-hidden">
-    <label>Patient Name (for paid form)</label>
-    {{ form.patient_name }}
-    <label>Paid Price</label>
-    {{ form.price_variant }}
+  {{ form.non_field_errors }}
+
+  <div class="form-field">
+    <label for="{{ form.share_form.id_for_label }}">Select Form</label>
+    {{ form.share_form }}
+    {{ form.share_form.errors }}
+    <span class="field-help">Choose the free multilingual screening or one of the paid age-band forms.</span>
   </div>
+
+  <div id="language-wrap" class="form-field conditional-panel is-hidden" data-free-only>
+    <label for="{{ form.language.id_for_label }}">Select Language</label>
+    {{ form.language }}
+    {{ form.language.errors }}
+    <span class="field-help">Language applies only to the free Behavioral and Emotional Red Flags form.</span>
+  </div>
+
+  <div id="paid-name-wrap" class="form-field conditional-panel is-hidden" data-paid-only>
+    <label for="{{ form.patient_name.id_for_label }}">Patient Name</label>
+    {{ form.patient_name }}
+    {{ form.patient_name.errors }}
+  </div>
+
+  <div class="form-field">
+    <label for="{{ form.parent_whatsapp.id_for_label }}">Parent WhatsApp Number</label>
+    {{ form.parent_whatsapp }}
+    {{ form.parent_whatsapp.errors }}
+    <span class="field-help">The WhatsApp message will open with the correct secure link for the selected form.</span>
+  </div>
+
+  <div id="paid-contact-wrap" class="conditional-panel is-hidden" data-paid-only>
+    <div class="form-field">
+      <label for="{{ form.patient_email.id_for_label }}">Patient Email</label>
+      {{ form.patient_email }}
+      {{ form.patient_email.errors }}
+      <span class="field-help">The patient report will be mailed here after submission.</span>
+    </div>
+
+    <div class="form-field">
+      <label for="{{ form.price_variant.id_for_label }}">Payment Amount</label>
+      {{ form.price_variant }}
+      {{ form.price_variant.errors }}
+      <span class="field-help">Current amount for this paid form. This can be fixed per form later without changing the patient journey.</span>
+    </div>
+  </div>
+
+  <p id="share-mode-hint" class="mode-hint">Select a form to continue.</p>
+
   <div class="form-actions">
     <button class="btn btn-green" type="submit">Send via WhatsApp</button>
   </div>
@@ -58,19 +93,40 @@
 <script>
   (function () {
     const formSelect = document.getElementById("id_share_form");
-    const langWrap = document.getElementById("language-wrap");
-    const paidWrap = document.getElementById("paid-wrap");
+    const freeOnlyPanels = document.querySelectorAll("[data-free-only]");
+    const paidOnlyPanels = document.querySelectorAll("[data-paid-only]");
+    const modeHint = document.getElementById("share-mode-hint");
     const languageInput = document.getElementById("id_language");
     const patientName = document.getElementById("id_patient_name");
+    const patientEmail = document.getElementById("id_patient_email");
     const priceVariant = document.getElementById("id_price_variant");
+
+    function setPanelState(panels, isVisible) {
+      panels.forEach(function (panel) {
+        panel.classList.toggle("is-hidden", !isVisible);
+        panel.querySelectorAll("input, select, textarea").forEach(function (field) {
+          field.disabled = !isVisible;
+        });
+      });
+    }
+
     function syncMode() {
       const val = formSelect ? formSelect.value : "";
+      const hasSelection = Boolean(val);
       const isPaid = val.startsWith("P:");
-      langWrap.classList.toggle("is-hidden", isPaid);
-      paidWrap.classList.toggle("is-hidden", !isPaid);
-      if (languageInput) languageInput.required = !isPaid;
+      setPanelState(freeOnlyPanels, hasSelection && !isPaid);
+      setPanelState(paidOnlyPanels, isPaid);
+      if (languageInput) languageInput.required = hasSelection && !isPaid;
       if (patientName) patientName.required = isPaid;
+      if (patientEmail) patientEmail.required = isPaid;
       if (priceVariant) priceVariant.required = isPaid;
+      if (modeHint) {
+        modeHint.textContent = isPaid
+          ? "Paid form selected: language is not required. Enter patient details and payment amount."
+          : hasSelection
+            ? "Free screening selected: choose the parent language, then enter the parent WhatsApp number."
+            : "Select a form to continue.";
+      }
     }
     if (formSelect) {
       formSelect.addEventListener("change", syncMode);

@@ -220,14 +220,14 @@ def clinic_send(request, code):
         from paid.models import EsCfgForm
 
         paid_choices = [
-            (f"P:{f.form_code}", f"Paid: {f.title}")
+            (f"P:{f.form_code}", f"Paid form: {f.title}")
             for f in EsCfgForm.objects.filter(is_active=True).order_by("age_min_months", "title")
         ]
     except Exception:
         paid_choices = []
 
-    behavioral_choices = [("B:behavioral", "Behavioral: Behavioral and Emotional Red Flags")]
-    form_choices = behavioral_choices + paid_choices
+    behavioral_choices = [("B:behavioral", "Free screening: Behavioral and Emotional Red Flags")]
+    form_choices = [("", "Select the form to send")] + behavioral_choices + paid_choices
 
     if request.method == "POST":
         form = ClinicSendForm(request.POST, lang_choices=lang_choices, form_choices=form_choices)
@@ -262,7 +262,7 @@ def clinic_send(request, code):
                     final_amount_paise=final_amount,
                     patient_name=form.cleaned_data.get("patient_name") or "Patient",
                     patient_whatsapp=normalize_phone(parent_phone),
-                    patient_email=None,
+                    patient_email=form.cleaned_data.get("patient_email") or None,
                     status=EsPayOrder.Status.PAYMENT_SKIPPED if final_amount == 0 else EsPayOrder.Status.PAYMENT_PENDING,
                     link_token_hash="pending",
                     link_expires_at=timezone.now() + timedelta(days=7),
