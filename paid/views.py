@@ -289,7 +289,16 @@ def patient_payment(request, order_code):
         .order_by("-created_at")
         .first()
     )
-    if not tx or not tx.gateway_order_id:
+
+    def _tx_matches_gateway_mode(transaction):
+        if not transaction:
+            return False
+        payload = transaction.raw_payload_json if isinstance(transaction.raw_payload_json, dict) else {}
+        if "razorpay_live_mode" not in payload:
+            return not adapter.live_mode
+        return bool(payload.get("razorpay_live_mode")) == adapter.live_mode
+
+    if not tx or not tx.gateway_order_id or not _tx_matches_gateway_mode(tx):
         gateway_order = adapter.create_order(
             receipt=order.order_code,
             amount_paise=order.final_amount_paise,
@@ -302,6 +311,10 @@ def patient_payment(request, order_code):
             status=EsPayTransaction.Status.CREATED,
             amount_paise=order.final_amount_paise,
             currency=gateway_order.currency,
+            raw_payload_json={
+                "razorpay_live_mode": adapter.live_mode,
+                "key_id_prefix": adapter.public_key_id[:9],
+            },
         )
     audit.mark_payment_pending(workflow_case, order, tx)
 

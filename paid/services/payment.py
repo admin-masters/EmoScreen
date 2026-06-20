@@ -33,10 +33,9 @@ class RazorpayAdapter:
 
     def _setting(self, base: str, required: bool = True) -> str:
         if self.live_mode:
-            value = getattr(settings, f"{base}_LIVE", "")
-            if value:
-                return value
-        value = getattr(settings, f"{base}_TEST", "") or getattr(settings, base, "")
+            value = getattr(settings, f"{base}_LIVE", "") or getattr(settings, base, "")
+        else:
+            value = getattr(settings, f"{base}_TEST", "") or getattr(settings, base, "")
         if required and not value:
             raise RazorpayError(f"Missing Razorpay setting: {base}{'_LIVE/_TEST' if self.live_mode else ''}")
         return value

@@ -39,6 +39,13 @@ def csv_env(name, default):
     return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
 
 
+def bool_env(name, default=False):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 ALLOWED_HOSTS = csv_env(
     "ALLOWED_HOSTS",
     "127.0.0.1,localhost,emo.stage.cpdinclinic.co.in,emo.cpdinclinic.co.in,www.emo.cpdinclinic.co.in",
@@ -163,8 +170,8 @@ EMAIL_HOST = os.getenv("EMAIL_HOST", "")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
-EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "true").lower() == "true"
-EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "false").lower() == "true"
+EMAIL_USE_TLS = bool_env("EMAIL_USE_TLS", True)
+EMAIL_USE_SSL = bool_env("EMAIL_USE_SSL", False)
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 # --------------------------------------------------
@@ -175,7 +182,7 @@ SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 # PAYMENT_GATEWAY=razorpay only when real Razorpay keys are configured safely.
 PAYMENT_GATEWAY = os.getenv("PAYMENT_GATEWAY", "dummy").lower()
 
-RAZORPAY_LIVE_MODE = os.getenv("RAZORPAY_LIVE_MODE", "false").lower() == "true"
+RAZORPAY_LIVE_MODE = bool_env("RAZORPAY_LIVE_MODE", False)
 
 RAZORPAY_KEY_ID_TEST = os.getenv("RAZORPAY_KEY_ID_TEST", "")
 RAZORPAY_KEY_SECRET_TEST = os.getenv("RAZORPAY_KEY_SECRET_TEST", "")
@@ -229,7 +236,7 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = ["email", "profile"]
 SOCIAL_AUTH_REDIRECT_IS_HTTPS = os.getenv(
     "FORCE_HTTPS",
     "false"
-).lower() == "true"
+).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
