@@ -7,6 +7,10 @@
 <div class="card">
   <p><strong>Status:</strong> <span class="status-pill status-pill--info">{{ order.status }}</span></p>
   <p><strong>Patient:</strong> {{ order.patient_name }}</p>
+  <p><strong>Base Amount:</strong> ₹{{ base_amount_rupees|floatformat:2 }}</p>
+  {% if order.discount_paise %}
+    <p><strong>Discount:</strong> ₹{{ discount_rupees|floatformat:2 }}</p>
+  {% endif %}
   <p><strong>Final Amount:</strong> ₹{{ final_amount_rupees|floatformat:2 }}</p>
 </div>
 {% endblock %}

@@ -37,6 +37,12 @@
       {{ form.price_variant }}
       {{ form.price_variant.errors }}
     </div>
+
+    <div id="discount-wrap" class="form-field is-hidden" data-discount-only>
+      <label for="{{ form.discount_percent.id_for_label }}">Discount Percent (optional)</label>
+      {{ form.discount_percent }}
+      {{ form.discount_percent.errors }}
+    </div>
   </div>
 
   <div class="form-section">
@@ -104,10 +110,12 @@
     const formSelect = document.getElementById("id_share_form");
     const freeOnlyPanels = document.querySelectorAll("[data-free-only]");
     const paidOnlyPanels = document.querySelectorAll("[data-paid-only]");
+    const discountOnlyPanels = document.querySelectorAll("[data-discount-only]");
     const languageInput = document.getElementById("id_language");
     const patientName = document.getElementById("id_patient_name");
     const patientEmail = document.getElementById("id_patient_email");
     const priceVariant = document.getElementById("id_price_variant");
+    const discountPercent = document.getElementById("id_discount_percent");
     const whatsappLabel = document.getElementById("parent-whatsapp-label");
 
     function setPanelState(panels, isVisible) {
@@ -123,18 +131,22 @@
       const val = formSelect ? formSelect.value : "";
       const hasSelection = Boolean(val);
       const isPaid = val.startsWith("P:");
+      const isDiscountable = isPaid && priceVariant && priceVariant.value === "INR_499";
       setPanelState(freeOnlyPanels, hasSelection && !isPaid);
       setPanelState(paidOnlyPanels, isPaid);
+      setPanelState(discountOnlyPanels, isDiscountable);
       if (languageInput) languageInput.required = hasSelection && !isPaid;
       if (patientName) patientName.required = isPaid;
       if (patientEmail) patientEmail.required = isPaid;
       if (priceVariant) priceVariant.required = isPaid;
+      if (discountPercent) discountPercent.required = false;
       if (whatsappLabel) {
         whatsappLabel.textContent = isPaid ? "Parent / Patient WhatsApp Number" : "Parent WhatsApp Number";
       }
     }
     if (formSelect) {
       formSelect.addEventListener("change", syncMode);
+      if (priceVariant) priceVariant.addEventListener("change", syncMode);
       syncMode();
     }
   })();

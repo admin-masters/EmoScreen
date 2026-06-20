@@ -6,6 +6,10 @@
 </section>
 <div class="card">
   <p><strong>Order:</strong> {{ order.order_code }}</p>
+  <p><strong>Base Amount:</strong> ₹{{ base_amount_rupees|floatformat:2 }}</p>
+  {% if order.discount_paise %}
+    <p><strong>Discount:</strong> ₹{{ discount_rupees|floatformat:2 }}</p>
+  {% endif %}
   <p><strong>Final Amount:</strong> ₹{{ final_amount_rupees|floatformat:2 }}</p>
   <p><strong>Form Link:</strong> <a href="{{ form_link }}">{{ form_link }}</a></p>
   <p><a class="btn btn-green" href="{{ wa_link }}">Open WhatsApp</a></p>

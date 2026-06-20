@@ -237,19 +237,16 @@ def clinic_send(request, code):
 
             if selected_form.startswith("P:"):
                 from paid.models import EsCfgForm, EsPayOrder
+                from paid.pricing import calculate_order_amounts
                 from paid.services.tokens import build_order_token_payload, hash_token, sign_payload
 
-                price_map = {
-                    "INR_499": 49900,
-                    "INR_100": 10000,
-                    "INR_20": 2000,
-                    "INR_1": 100,
-                    "INR_0": 0,
-                }
                 form_code = selected_form.split(":", 1)[1]
                 paid_form = get_object_or_404(EsCfgForm, form_code=form_code, is_active=True)
                 price_variant = form.cleaned_data.get("price_variant") or "INR_0"
-                final_amount = price_map.get(price_variant, 0)
+                base_amount, discount_paise, final_amount = calculate_order_amounts(
+                    price_variant,
+                    form.cleaned_data.get("discount_percent"),
+                )
 
                 order_code = generate_doctor_code().upper()
                 order = EsPayOrder.objects.create(
@@ -257,8 +254,8 @@ def clinic_send(request, code):
                     doctor=pro,
                     form=paid_form,
                     price_variant=price_variant,
-                    base_amount_paise=final_amount,
-                    discount_paise=0,
+                    base_amount_paise=base_amount,
+                    discount_paise=discount_paise,
                     final_amount_paise=final_amount,
                     patient_name=form.cleaned_data.get("patient_name") or "Patient",
                     patient_whatsapp=normalize_phone(parent_phone),

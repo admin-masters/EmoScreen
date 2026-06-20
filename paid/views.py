@@ -25,18 +25,10 @@ from .services.reporting import build_pdf_password, generate_and_store_reports
 from .services.scoring import compute_submission_scores
 from .services.tokens import build_order_token_payload, hash_token, sign_payload, unsign_payload
 from .services import audit
+from .pricing import calculate_order_amounts, revenue_split_amounts
 
 
 JOURNEY_LOCKED_CONTEXT = {"hide_journey_nav": True}
-
-PRICE_MAP = {
-    "INR_499": 49900,
-    "INR_100": 10000,
-    "INR_20": 2000,
-    "INR_1": 100,
-    "INR_0": 0,
-}
-
 
 def _paid_order_is_final(order) -> bool:
     return (
@@ -57,9 +49,10 @@ def prescribe_order(request, doctor_code):
         if form.is_valid():
             cfg_form = form.cleaned_data["form_code"]
             price_variant = form.cleaned_data["price_variant"]
-            discount_paise = (form.cleaned_data.get("discount_rupees") or 0) * 100
-            base_amount = PRICE_MAP[price_variant]
-            final_amount = max(0, base_amount - discount_paise)
+            base_amount, discount_paise, final_amount = calculate_order_amounts(
+                price_variant,
+                form.cleaned_data.get("discount_percent"),
+            )
 
             order_code = secrets.token_hex(6).upper()
             order = EsPayOrder.objects.create(
@@ -108,7 +101,20 @@ def prescribe_order(request, doctor_code):
                 f"{link}\n\n"
                 "For any further queries or support, please send a WhatsApp message to +91-8297634553."
             )
-            return render(request, "paid/prescribe_done.html", {"order": order, "form_link": link, "wa_link": whatsapp_link(order.patient_whatsapp, msg), "message": msg, "final_amount_rupees": order.final_amount_paise / 100, **JOURNEY_LOCKED_CONTEXT})
+            return render(
+                request,
+                "paid/prescribe_done.html",
+                {
+                    "order": order,
+                    "form_link": link,
+                    "wa_link": whatsapp_link(order.patient_whatsapp, msg),
+                    "message": msg,
+                    "base_amount_rupees": order.base_amount_paise / 100,
+                    "discount_rupees": order.discount_paise / 100,
+                    "final_amount_rupees": order.final_amount_paise / 100,
+                    **JOURNEY_LOCKED_CONTEXT,
+                },
+            )
     else:
         form = PaidPrescriptionForm()
 
@@ -130,7 +136,18 @@ def order_detail(request, doctor_code, order_code):
     if gate is not None:
         return gate
     order = get_object_or_404(EsPayOrder, doctor=doctor, order_code=order_code)
-    return render(request, "paid/order_detail.html", {"order": order, "doctor": doctor, "final_amount_rupees": order.final_amount_paise / 100, **JOURNEY_LOCKED_CONTEXT})
+    return render(
+        request,
+        "paid/order_detail.html",
+        {
+            "order": order,
+            "doctor": doctor,
+            "base_amount_rupees": order.base_amount_paise / 100,
+            "discount_rupees": order.discount_paise / 100,
+            "final_amount_rupees": order.final_amount_paise / 100,
+            **JOURNEY_LOCKED_CONTEXT,
+        },
+    )
 
 
 @require_http_methods(["GET", "POST"])
@@ -791,7 +808,7 @@ def _send_paid_assessment_link_whatsapp(order, link, workflow_case=None):
         return None
 
     campaign = getattr(settings, "AISENSY_PAID_ASSESSMENT_CAMPAIGN_NAME", "mha_order_processing")
-    param_count = getattr(settings, "AISENSY_PAID_ASSESSMENT_PARAM_COUNT", 1)
+    param_count = getattr(settings, "AISENSY_PAID_ASSESSMENT_PARAM_COUNT", 2)
     recipient = normalize_phone(order.patient_whatsapp)
     ok = _aisensy_send(
         recipient,
@@ -981,16 +998,17 @@ def _send_report_emails(order, report, patient_pdf: bytes, doctor_pdf: bytes, wo
 def _create_revenue_split(transaction):
     if EsPayRevenueSplit.objects.filter(transaction=transaction).exists():
         return
-    half = int(transaction.amount_paise / 2)
+    company_amount, doctor_amount = revenue_split_amounts(transaction.order, transaction.amount_paise)
+    total = max(transaction.amount_paise, 1)
     EsPayRevenueSplit.objects.create(
         transaction=transaction,
         party=EsPayRevenueSplit.Party.INDITECH,
-        percent=50,
-        amount_paise=half,
+        percent=(Decimal(company_amount) * Decimal("100") / Decimal(total)).quantize(Decimal("0.01")),
+        amount_paise=company_amount,
     )
     EsPayRevenueSplit.objects.create(
         transaction=transaction,
         party=EsPayRevenueSplit.Party.EQUIPOISE,
-        percent=50,
-        amount_paise=transaction.amount_paise - half,
+        percent=(Decimal(doctor_amount) * Decimal("100") / Decimal(total)).quantize(Decimal("0.01")),
+        amount_paise=doctor_amount,
     )

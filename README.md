@@ -861,7 +861,7 @@ This codebase is **view-oriented rather than REST-oriented**. Most endpoints ret
 
 | Path                                                                      | Method    | Purpose                        | Request parameters / body                                                                                                                      | Response         | Auth                       |
 | ------------------------------------------------------------------------- | --------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | -------------------------- |
-| `/clinic/<doctor_code>/paid/prescribe/`                                   | GET, POST | Create paid order/prescription | `PaidPrescriptionForm`: `form_code`, `price_variant`, `patient_name`, `patient_whatsapp`, optional `patient_email`, optional `discount_rupees` | HTML             | Google OAuth + email-match |
+| `/clinic/<doctor_code>/paid/prescribe/`                                   | GET, POST | Create paid order/prescription | `PaidPrescriptionForm`: `form_code`, `price_variant`, `patient_name`, `patient_whatsapp`, optional `patient_email`, optional `discount_percent` for ₹499 orders | HTML             | Google OAuth + email-match |
 | `/clinic/<doctor_code>/paid/orders/`                                      | GET       | Doctor order list              | none                                                                                                                                           | HTML             | Google OAuth + email-match |
 | `/clinic/<doctor_code>/paid/orders/<order_code>/`                         | GET       | Doctor order detail            | path params                                                                                                                                    | HTML             | Google OAuth + email-match |
 | `/p/<order_code>/<doctor_code>/<form_code>/<final_amount_paise>/<token>/` | GET, POST | Patient paid-entry gateway     | optional `patient_email`                                                                                                                       | HTML or redirect | signed link                |
@@ -996,7 +996,7 @@ sequenceDiagram
 1. Razorpay posts to `/payments/razorpay/webhook/`.
 2. Signature is verified against `X-Razorpay-Signature`.
 3. Matching `EsPayTransaction` is updated.
-4. Success events set the order status to `PAID` and create revenue split rows.
+4. Success events set the order status to `PAID` and create revenue split rows. For ₹499 orders, ₹250 remains the company component and any discount is applied only against the ₹249 doctor component.
 
 ---
 

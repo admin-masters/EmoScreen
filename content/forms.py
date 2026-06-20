@@ -3,6 +3,7 @@ from django import forms
 from .models import RegisteredProfessional
 from .utils import normalize_phone
 from .state_districts import state_choices, district_choices, is_valid_pair
+from paid.pricing import PRICE_CHOICES, PRICE_INR_499
 
 SALUTATIONS = [("Dr", "Dr."), ("Mr", "Mr."), ("Ms", "Ms."), ("Mrs", "Mrs.")]
 
@@ -131,16 +132,18 @@ class ClinicSendForm(forms.Form):
     patient_name = forms.CharField(label="Patient Name (for paid form)", max_length=255, required=False)
     patient_email = forms.EmailField(label="Patient Email (for paid report)", required=False)
     price_variant = forms.ChoiceField(
-        label="Payment Amount",
+        label="Form Amount",
         required=False,
-        choices=[
-            ("INR_499", "₹499"),
-            ("INR_100", "₹100"),
-            ("INR_20", "₹20"),
-            ("INR_1", "₹1"),
-            ("INR_0", "₹0"),
-        ],
+        choices=PRICE_CHOICES,
         initial="INR_0",
+    )
+    discount_percent = forms.DecimalField(
+        label="Discount Percent (optional)",
+        max_digits=5,
+        decimal_places=2,
+        min_value=0,
+        max_value=100,
+        required=False,
     )
 
     def __init__(self, *args, **kwargs):
@@ -153,6 +156,7 @@ class ClinicSendForm(forms.Form):
         self.fields["patient_name"].widget.attrs.update({"placeholder": "Child / patient name"})
         self.fields["parent_whatsapp"].widget.attrs.update({"placeholder": "10-digit parent WhatsApp number"})
         self.fields["patient_email"].widget.attrs.update({"placeholder": "parent@example.com"})
+        self.fields["discount_percent"].widget.attrs.update({"placeholder": "0"})
 
     def clean_parent_whatsapp(self):
         return normalize_phone(self.cleaned_data["parent_whatsapp"])
@@ -166,10 +170,14 @@ class ClinicSendForm(forms.Form):
         is_paid = selected_form.startswith("P:")
 
         if is_paid:
+            if not data.get("price_variant"):
+                self.add_error("price_variant", "Please select the form amount.")
             if not data.get("patient_name"):
                 self.add_error("patient_name", "Patient name is required for paid forms.")
             if not data.get("patient_email"):
                 self.add_error("patient_email", "Patient email is required for paid reports.")
+            if data.get("price_variant") != PRICE_INR_499 and data.get("discount_percent"):
+                self.add_error("discount_percent", "Discount is available only for the ₹499 form amount.")
         elif not data.get("language"):
             self.add_error("language", "Please select a language for the free screening form.")
 

@@ -6,7 +6,63 @@
 </section>
 <form method="post" class="card form-card centered-card">
   {% csrf_token %}
-  {{ form.as_p }}
+  {{ form.non_field_errors }}
+
+  <div class="form-field">
+    <label for="{{ form.form_code.id_for_label }}">Select Form</label>
+    {{ form.form_code }}
+    {{ form.form_code.errors }}
+  </div>
+
+  <div class="form-field">
+    <label for="{{ form.price_variant.id_for_label }}">Form Amount</label>
+    {{ form.price_variant }}
+    {{ form.price_variant.errors }}
+  </div>
+
+  <div id="discount-wrap" class="form-field is-hidden">
+    <label for="{{ form.discount_percent.id_for_label }}">Discount Percent (optional)</label>
+    {{ form.discount_percent }}
+    {{ form.discount_percent.errors }}
+  </div>
+
+  <div class="form-field">
+    <label for="{{ form.patient_name.id_for_label }}">Patient Name</label>
+    {{ form.patient_name }}
+    {{ form.patient_name.errors }}
+  </div>
+
+  <div class="form-field">
+    <label for="{{ form.patient_whatsapp.id_for_label }}">Parent / Patient WhatsApp Number</label>
+    {{ form.patient_whatsapp }}
+    {{ form.patient_whatsapp.errors }}
+  </div>
+
+  <div class="form-field">
+    <label for="{{ form.patient_email.id_for_label }}">Patient Email</label>
+    {{ form.patient_email }}
+    {{ form.patient_email.errors }}
+  </div>
+
   <button class="btn btn-green" type="submit">Create</button>
 </form>
+
+<script>
+  (function () {
+    const priceVariant = document.getElementById("id_price_variant");
+    const discountWrap = document.getElementById("discount-wrap");
+    const discountPercent = document.getElementById("id_discount_percent");
+
+    function syncDiscount() {
+      const isDiscountable = priceVariant && priceVariant.value === "INR_499";
+      if (discountWrap) discountWrap.classList.toggle("is-hidden", !isDiscountable);
+      if (discountPercent) discountPercent.disabled = !isDiscountable;
+    }
+
+    if (priceVariant) {
+      priceVariant.addEventListener("change", syncDiscount);
+      syncDiscount();
+    }
+  })();
+</script>
 {% endblock %}

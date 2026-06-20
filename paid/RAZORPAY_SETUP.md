@@ -68,7 +68,7 @@ RAZORPAY_WEBHOOK_SECRET = (
 The following are stored/updated:
 - `EsPayTransaction`: `gateway_order_id`, `gateway_payment_id`, `gateway_signature`, `status`, `amount_paise`, `currency`, `raw_payload_json`.
 - `EsPayOrder`: status and `paid_at`.
-- `EsPayRevenueSplit`: idempotent 50/50 split.
+- `EsPayRevenueSplit`: idempotent split. For the ₹499 amount, ₹250 stays as the company component and the remaining doctor component is reduced by any doctor-side discount.
 - `EsPayEmailLog`: status and message metadata.
 
 ---
