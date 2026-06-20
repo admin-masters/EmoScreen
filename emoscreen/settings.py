@@ -19,7 +19,7 @@ DEPLOY_ENV_FILE = BASE_DIR / ".deploy_env"
 PROD_ENV = Path("/var/www/secrets/.env")
 
 if PROD_ENV.exists():
-    load_dotenv(PROD_ENV)
+    load_dotenv(PROD_ENV, override=True)
 elif LOCAL_ENV.exists():
     load_dotenv(LOCAL_ENV)
 
