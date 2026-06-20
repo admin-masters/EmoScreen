@@ -235,3 +235,30 @@
   color: var(--color-text-muted);
   font-size: 0.92rem;
 }
+
+.footer-copy,
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+}
+
+.footer-copy {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.footer-links {
+  justify-content: flex-end;
+}
+
+.footer-links a {
+  color: var(--color-secondary);
+  font-weight: 650;
+}
+
+.footer-links a:hover {
+  color: var(--color-primary-deep);
+}

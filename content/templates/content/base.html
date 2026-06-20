@@ -94,8 +94,20 @@
 
   <footer class="site-footer">
     <div class="container footer-shell">
-      <span>EmoScreen for pediatric emotional and behavioral screening.</span>
-      <span>Designed for trusted clinical workflows.</span>
+      <div class="footer-copy">
+        <span>EmoScreen for pediatric emotional and behavioral screening.</span>
+        <span>Designed for trusted clinical workflows.</span>
+      </div>
+      {% if not hide_journey_nav %}
+        <nav class="footer-links" aria-label="Legal and support links">
+          <a href="{% url 'content:privacy_policy' %}">Privacy Policy</a>
+          <a href="{% url 'content:terms_conditions' %}">Terms & Conditions</a>
+          <a href="{% url 'content:terms_public' %}">Patient Terms</a>
+          <a href="{% url 'content:doctor_caregiver_terms' %}">Doctor/Caregiver Terms</a>
+          <a href="{% url 'content:cancellation_refund_policy' %}">Refund Policy</a>
+          <a href="{% url 'content:contact_us' %}">Contact Us</a>
+        </nav>
+      {% endif %}
     </div>
   </footer>
 
