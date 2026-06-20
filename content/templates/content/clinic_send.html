@@ -17,7 +17,6 @@
       <span class="step-badge">1</span>
       <div>
         <h3>Choose Assessment</h3>
-        <p>Select the exact form you want to share with this family.</p>
       </div>
     </div>
 
@@ -25,14 +24,18 @@
       <label for="{{ form.share_form.id_for_label }}">Select Form</label>
       {{ form.share_form }}
       {{ form.share_form.errors }}
-      <span class="field-help">Free screening supports parent language selection. Paid assessments are English-only.</span>
     </div>
 
-    <div id="language-wrap" class="form-field conditional-panel is-hidden" data-free-only>
+    <div id="language-wrap" class="form-field is-hidden" data-free-only>
       <label for="{{ form.language.id_for_label }}">Select Language</label>
       {{ form.language }}
       {{ form.language.errors }}
-      <span class="field-help">Language applies only to the free Behavioral and Emotional Red Flags form.</span>
+    </div>
+
+    <div id="paid-amount-wrap" class="form-field is-hidden" data-paid-only>
+      <label for="{{ form.price_variant.id_for_label }}">Form Amount</label>
+      {{ form.price_variant }}
+      {{ form.price_variant.errors }}
     </div>
   </div>
 
@@ -41,11 +44,11 @@
       <span class="step-badge">2</span>
       <div>
         <h3>Patient Details</h3>
-        <p>Enter the recipient details needed for WhatsApp, payment, and report delivery.</p>
+        <p>Enter the recipient details needed for WhatsApp and report delivery.</p>
       </div>
     </div>
 
-    <div id="paid-name-wrap" class="form-field conditional-panel is-hidden" data-paid-only>
+    <div id="paid-name-wrap" class="form-field is-hidden" data-paid-only>
       <label for="{{ form.patient_name.id_for_label }}">Patient Name</label>
       {{ form.patient_name }}
       {{ form.patient_name.errors }}
@@ -55,32 +58,18 @@
       <label id="parent-whatsapp-label" for="{{ form.parent_whatsapp.id_for_label }}">Parent WhatsApp Number</label>
       {{ form.parent_whatsapp }}
       {{ form.parent_whatsapp.errors }}
-      <span class="field-help">The WhatsApp message will open with the correct secure link for the selected form.</span>
     </div>
 
-    <div id="paid-contact-wrap" class="conditional-panel is-hidden" data-paid-only>
-      <div class="form-field">
-        <label for="{{ form.patient_email.id_for_label }}">Patient Email</label>
-        {{ form.patient_email }}
-        {{ form.patient_email.errors }}
-        <span class="field-help">The paid assessment link and patient report will be mailed here.</span>
-      </div>
-
-      <div class="form-field">
-        <label for="{{ form.price_variant.id_for_label }}">Payment Amount</label>
-        {{ form.price_variant }}
-        {{ form.price_variant.errors }}
-        <span class="field-help">Current amount for this paid form.</span>
-      </div>
+    <div id="paid-contact-wrap" class="form-field is-hidden" data-paid-only>
+      <label for="{{ form.patient_email.id_for_label }}">Patient Email</label>
+      {{ form.patient_email }}
+      {{ form.patient_email.errors }}
     </div>
   </div>
-
-  <p id="share-mode-hint" class="mode-hint" aria-live="polite">Select a form to continue.</p>
 
   <div class="form-actions">
     <button class="btn btn-green" type="submit">Send via WhatsApp</button>
   </div>
-  <p class="form-note">We’ll open WhatsApp with a pre-filled message in the selected language that contains the patient link.</p>
 </form>
 
 <div class="card hero-panel">
@@ -115,7 +104,6 @@
     const formSelect = document.getElementById("id_share_form");
     const freeOnlyPanels = document.querySelectorAll("[data-free-only]");
     const paidOnlyPanels = document.querySelectorAll("[data-paid-only]");
-    const modeHint = document.getElementById("share-mode-hint");
     const languageInput = document.getElementById("id_language");
     const patientName = document.getElementById("id_patient_name");
     const patientEmail = document.getElementById("id_patient_email");
@@ -143,12 +131,6 @@
       if (priceVariant) priceVariant.required = isPaid;
       if (whatsappLabel) {
         whatsappLabel.textContent = isPaid ? "Parent / Patient WhatsApp Number" : "Parent WhatsApp Number";
-      }
-      if (modeHint) {
-        modeHint.classList.toggle("is-hidden", isPaid);
-        modeHint.textContent = hasSelection && !isPaid
-          ? "Free screening selected: choose the parent language, then enter the parent WhatsApp number."
-          : "Select a form to continue.";
       }
     }
     if (formSelect) {
