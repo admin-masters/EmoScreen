@@ -796,7 +796,7 @@ def _send_paid_assessment_link_whatsapp(order, link, workflow_case=None):
     ok = _aisensy_send(
         recipient,
         order.patient_name or "Parent",
-        [link],
+        [order.patient_name or "Parent", link],
         campaign_name=campaign,
         param_count=param_count,
     )
@@ -812,7 +812,7 @@ def _send_paid_assessment_link_whatsapp(order, link, workflow_case=None):
             metadata={
                 "link": link,
                 "campaign": campaign,
-                "template_params": ["assessment_link"],
+                "template_params": ["patient_name", "assessment_link"],
                 "message_type": "PAID_ASSESSMENT_LINK",
             },
         )

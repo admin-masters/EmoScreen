@@ -220,7 +220,7 @@ AISENSY_PAID_ASSESSMENT_CAMPAIGN_NAME = os.getenv(
     "AISENSY_PAID_ASSESSMENT_CAMPAIGN_NAME",
     "mha_order_processing",
 )
-AISENSY_PAID_ASSESSMENT_PARAM_COUNT = int_env("AISENSY_PAID_ASSESSMENT_PARAM_COUNT", 1)
+AISENSY_PAID_ASSESSMENT_PARAM_COUNT = int_env("AISENSY_PAID_ASSESSMENT_PARAM_COUNT", 2)
 
 # --------------------------------------------------
 # Public Self Screen Defaults
