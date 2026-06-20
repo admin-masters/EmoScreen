@@ -22,7 +22,17 @@
 
   <div id="discount-wrap" class="form-field is-hidden">
     <label for="{{ form.discount_percent.id_for_label }}">Discount Percent (optional)</label>
-    {{ form.discount_percent }}
+    <input
+      type="number"
+      name="{{ form.discount_percent.html_name }}"
+      id="{{ form.discount_percent.id_for_label }}"
+      min="0"
+      max="100"
+      step="0.01"
+      inputmode="decimal"
+      placeholder="0"
+      value="{{ form.discount_percent.value|default_if_none:'' }}"
+    >
     {{ form.discount_percent.errors }}
   </div>
 
@@ -52,13 +62,30 @@
     const priceVariant = document.getElementById("id_price_variant");
     const discountWrap = document.getElementById("discount-wrap");
     const discountPercent = document.getElementById("id_discount_percent");
+    const allowedPrices = new Set(["INR_499", "INR_1", "INR_0"]);
+
+    function pruneAmountOptions() {
+      if (!priceVariant) return;
+      Array.from(priceVariant.options).forEach(function (option) {
+        if (option.value && !allowedPrices.has(option.value)) {
+          option.remove();
+        }
+      });
+      if (!allowedPrices.has(priceVariant.value)) {
+        priceVariant.value = "INR_499";
+      }
+    }
 
     function syncDiscount() {
       const isDiscountable = priceVariant && priceVariant.value === "INR_499";
       if (discountWrap) discountWrap.classList.toggle("is-hidden", !isDiscountable);
-      if (discountPercent) discountPercent.disabled = !isDiscountable;
+      if (discountPercent) {
+        discountPercent.disabled = !isDiscountable;
+        if (!isDiscountable) discountPercent.value = "";
+      }
     }
 
+    pruneAmountOptions();
     if (priceVariant) {
       priceVariant.addEventListener("change", syncDiscount);
       syncDiscount();
