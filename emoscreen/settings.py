@@ -46,6 +46,16 @@ def bool_env(name, default=False):
     return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def int_env(name, default=0):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
 ALLOWED_HOSTS = csv_env(
     "ALLOWED_HOSTS",
     "127.0.0.1,localhost,emo.stage.cpdinclinic.co.in,emo.cpdinclinic.co.in,www.emo.cpdinclinic.co.in",
@@ -204,6 +214,13 @@ RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
 AISENSY_API_KEY = os.getenv("AISENSY_API_KEY", "")
 
 AISENSY_CAMPAIGN_NAME = os.getenv("AISENSY_CAMPAIGN_NAME", "")
+AISENSY_PARAM_COUNT = int_env("AISENSY_PARAM_COUNT", 3)
+
+AISENSY_PAID_ASSESSMENT_CAMPAIGN_NAME = os.getenv(
+    "AISENSY_PAID_ASSESSMENT_CAMPAIGN_NAME",
+    "mha_order_processing",
+)
+AISENSY_PAID_ASSESSMENT_PARAM_COUNT = int_env("AISENSY_PAID_ASSESSMENT_PARAM_COUNT", 1)
 
 # --------------------------------------------------
 # Public Self Screen Defaults

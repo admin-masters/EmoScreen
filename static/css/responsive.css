@@ -1,7 +1,8 @@
 @media (max-width: 1024px) {
   .grid-3,
   .stats-grid,
-  .grid-2 {
+  .grid-2,
+  .payment-layout {
     grid-template-columns: 1fr;
   }
 

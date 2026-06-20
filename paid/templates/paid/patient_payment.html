@@ -3,9 +3,42 @@
 <section class="page-header text-center narrow-shell center-shell">
   <div class="page-eyebrow center-shell">Payment</div>
   <h1>Complete Payment</h1>
+  <p class="page-subtitle center-shell">Review the assessment details before continuing to secure Razorpay checkout.</p>
 </section>
-<div class="card">
-  <p><strong>Amount:</strong> ₹{{ final_amount_rupees|floatformat:2 }}</p>
+<div class="payment-layout">
+<div class="card payment-summary-card">
+  <div class="payment-amount-panel">
+    <span>Total Payable</span>
+    <strong>₹{{ final_amount_rupees|floatformat:2 }}</strong>
+  </div>
+
+  <div class="summary-grid compact-summary">
+    <div class="summary-item">
+      <span>Order</span>
+      <strong>{{ order.order_code }}</strong>
+    </div>
+    <div class="summary-item">
+      <span>Assessment</span>
+      <strong>{{ order.form.title }}</strong>
+    </div>
+    <div class="summary-item">
+      <span>Doctor</span>
+      <strong>{{ order.doctor.salutation }} {{ order.doctor.first_name }} {{ order.doctor.last_name }}</strong>
+    </div>
+    <div class="summary-item">
+      <span>Patient</span>
+      <strong>{{ order.patient_name }}</strong>
+    </div>
+    <div class="summary-item">
+      <span>Email</span>
+      <strong>{{ order.patient_email }}</strong>
+    </div>
+    <div class="summary-item">
+      <span>WhatsApp</span>
+      <strong>{{ order.patient_whatsapp }}</strong>
+    </div>
+  </div>
+
   {% if payment_error %}
     <p class="alert alert-error"><strong>{{ payment_error }}</strong></p>
   {% endif %}
@@ -40,9 +73,22 @@
       <input type="hidden" name="razorpay_signature" id="razorpay_signature">
     </form>
 
-    <button class="btn btn-green" id="pay-now" type="button">Pay Now</button>
-    <p class="muted">Secure checkout powered by Razorpay.</p>
+    <div class="payment-actions">
+      <button class="btn btn-green" id="pay-now" type="button">Pay Now</button>
+      <p class="muted">Secure checkout powered by Razorpay. The assessment link will be sent by email and WhatsApp after successful payment.</p>
+    </div>
   {% endif %}
+</div>
+
+<div class="card payment-assurance-card">
+  <h2>What happens next?</h2>
+  <ul class="list-clean">
+    <li>Payment is verified securely through Razorpay.</li>
+    <li>The assessment form link is sent to the registered patient email.</li>
+    <li>The same link is also triggered through the configured AiSensy WhatsApp template.</li>
+    <li>After submission, reports are generated and delivered through the existing report workflow.</li>
+  </ul>
+</div>
 </div>
 
 {% if not dummy_gateway %}
@@ -59,7 +105,7 @@
         amount: "{{ order.final_amount_paise }}",
         currency: "INR",
         name: "EmoScreen",
-        description: "EmoScreen Assessment",
+        description: "{{ order.form.title|escapejs }} for {{ order.patient_name|escapejs }}",
         order_id: "{{ gateway_order_id|escapejs }}",
         prefill: {
           name: "{{ order.patient_name|default:''|escapejs }}",
@@ -67,7 +113,11 @@
           contact: "{{ order.patient_whatsapp|default:''|escapejs }}"
         },
         notes: {
-          order_code: "{{ order.order_code|escapejs }}"
+          order_code: "{{ order.order_code|escapejs }}",
+          patient_name: "{{ order.patient_name|default:''|escapejs }}",
+          doctor_code: "{{ order.doctor.unique_doctor_code|default:''|escapejs }}",
+          doctor_name: "{{ order.doctor.salutation|default:''|escapejs }} {{ order.doctor.first_name|default:''|escapejs }} {{ order.doctor.last_name|default:''|escapejs }}",
+          form_title: "{{ order.form.title|default:''|escapejs }}"
         },
         {% if razorpay_test_mode %}
         config: {

@@ -14,11 +14,11 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
 from content.models import RegisteredProfessional
-from content.utils import normalize_phone, whatsapp_link
+from content.utils import _aisensy_send, normalize_phone, whatsapp_link
 from content.views import _gate_google_and_email
 
 from .forms import DemographicsForm, PaidPrescriptionForm, PatientEmailForm
-from .models import EsCfgOption, EsCfgQuestion, EsCfgSection, EsPayEmailLog, EsPayOrder, EsPayRevenueSplit, EsPayTransaction, EsRepReport, EsSubAnswer, EsSubSubmission
+from .models import EsCfgOption, EsCfgQuestion, EsCfgSection, EsPayEmailLog, EsPayOrder, EsPayRevenueSplit, EsPayTransaction, EsRepReport, EsSubAnswer, EsSubSubmission, WorkflowDeliveryAttempt
 from .services.mailer import _sendgrid_send_with_attachments, log_email
 from .services.payment import RazorpayAdapter, RazorpayError
 from .services.reporting import build_pdf_password, generate_and_store_reports
@@ -707,58 +707,116 @@ def _is_basic_detail_question(question):
 
 
 def _send_assessment_link_email(order, request, workflow_case=None):
-    if not order.patient_email:
+    if not order.patient_email and not order.patient_whatsapp:
         return None
+
+    link = request.build_absolute_uri(reverse("paid:patient_form", args=[order.order_code]))
+    subject = "EmoScreen Assessment Link"
+    email_log = None
 
     with transaction.atomic():
         order = EsPayOrder.objects.select_for_update().get(pk=order.pk)
-        existing_success = EsPayEmailLog.objects.filter(
-            order=order,
-            email_type=EsPayEmailLog.EmailType.PAYMENT_LINK,
-            status=EsPayEmailLog.Status.SENT,
-        ).exists()
-        if existing_success:
-            return None
+        if order.patient_email:
+            existing_success = EsPayEmailLog.objects.filter(
+                order=order,
+                email_type=EsPayEmailLog.EmailType.PAYMENT_LINK,
+                status=EsPayEmailLog.Status.SENT,
+            ).exists()
+            if not existing_success:
+                patient_name = escape(order.patient_name or "Parent")
+                ok, meta = _sendgrid_send_with_attachments(
+                    order.patient_email,
+                    subject,
+                    (
+                        f"<p>Dear {patient_name}, Your doctor has prescribed EmoScreen service for you.</p>"
+                        f"<p>Please complete the assessment by filling up the form at this link: "
+                        f"<a href=\"{link}\">{link}</a></p>"
+                        "<p>If you need help to understand any of the questions please take help from your doctor.</p>"
+                        "<p>For any further queries or support, please send a WhatsApp message to: +91-8297634553.</p>"
+                    ),
+                    [],
+                )
+                delivery_status = _delivery_status(ok, meta)
+                email_log = log_email(
+                    order,
+                    "PAYMENT_LINK",
+                    order.patient_email,
+                    subject,
+                    status=delivery_status,
+                    error_text="" if ok else str(meta),
+                    sendgrid_message_id=meta if ok else "",
+                )
+                if workflow_case:
+                    audit.record_delivery(
+                        workflow_case,
+                        channel="EMAIL",
+                        recipient=order.patient_email,
+                        subject=subject,
+                        status=delivery_status,
+                        provider=_email_provider(),
+                        provider_message_id=meta if ok else "",
+                        error_text="" if ok else str(meta),
+                        metadata={"link": link, "email_type": "PAYMENT_LINK"},
+                        email_log=email_log,
+                    )
 
-        link = request.build_absolute_uri(reverse("paid:patient_form", args=[order.order_code]))
-        subject = "EmoScreen Assessment Link"
-        patient_name = escape(order.patient_name or "Parent")
-        ok, meta = _sendgrid_send_with_attachments(
-            order.patient_email,
-            subject,
-            (
-                f"<p>Dear {patient_name}, Your doctor has prescribed EmoScreen service for you.</p>"
-                f"<p>Please complete the assessment by filling up the form at this link: "
-                f"<a href=\"{link}\">{link}</a></p>"
-                "<p>If you need help to understand any of the questions please take help from your doctor.</p>"
-                "<p>For any further queries or support, please send a WhatsApp message to: +91-8297634553.</p>"
-            ),
-            [],
-        )
-        delivery_status = _delivery_status(ok, meta)
-        email_log = log_email(
-            order,
-            "PAYMENT_LINK",
-            order.patient_email,
-            subject,
-            status=delivery_status,
-            error_text="" if ok else str(meta),
-            sendgrid_message_id=meta if ok else "",
-        )
-    if workflow_case:
-        audit.record_delivery(
-            workflow_case,
-            channel="EMAIL",
-            recipient=order.patient_email,
-            subject=subject,
-            status=delivery_status,
-            provider=_email_provider(),
-            provider_message_id=meta if ok else "",
-            error_text="" if ok else str(meta),
-            metadata={"link": link, "email_type": "PAYMENT_LINK"},
-            email_log=email_log,
-        )
+        _send_paid_assessment_link_whatsapp(order, link, workflow_case)
     return email_log
+
+
+def _send_paid_assessment_link_whatsapp(order, link, workflow_case=None):
+    if not order.patient_whatsapp:
+        return False
+
+    case = workflow_case
+    if not case:
+        try:
+            case = audit.case_for_order(order)
+        except Exception as exc:
+            print("Workflow audit error (paid assessment WhatsApp):", exc)
+            case = None
+
+    subject = "Paid assessment link"
+    if case and WorkflowDeliveryAttempt.objects.filter(
+        case=case,
+        channel=WorkflowDeliveryAttempt.Channel.WHATSAPP,
+        provider="aisensy",
+        subject=subject,
+        status__in=[
+            WorkflowDeliveryAttempt.Status.SENT,
+            WorkflowDeliveryAttempt.Status.DELIVERED,
+            WorkflowDeliveryAttempt.Status.OPENED,
+        ],
+    ).exists():
+        return None
+
+    campaign = getattr(settings, "AISENSY_PAID_ASSESSMENT_CAMPAIGN_NAME", "mha_order_processing")
+    param_count = getattr(settings, "AISENSY_PAID_ASSESSMENT_PARAM_COUNT", 1)
+    recipient = normalize_phone(order.patient_whatsapp)
+    ok = _aisensy_send(
+        recipient,
+        order.patient_name or "Parent",
+        [link],
+        campaign_name=campaign,
+        param_count=param_count,
+    )
+    if case:
+        audit.record_delivery(
+            case,
+            channel=WorkflowDeliveryAttempt.Channel.WHATSAPP,
+            recipient=recipient,
+            subject=subject,
+            status=WorkflowDeliveryAttempt.Status.SENT if ok else WorkflowDeliveryAttempt.Status.FAILED,
+            provider="aisensy",
+            error_text="" if ok else "AiSensy paid assessment template was not accepted or delivered by the API.",
+            metadata={
+                "link": link,
+                "campaign": campaign,
+                "template_params": ["assessment_link"],
+                "message_type": "PAID_ASSESSMENT_LINK",
+            },
+        )
+    return ok
 
 
 def _delivery_status(ok, meta):
