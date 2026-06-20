@@ -1,0 +1,15 @@
+{% extends "content/base.html" %}
+{% block content %}
+<section class="page-header text-center narrow-shell center-shell">
+  <div class="page-eyebrow center-shell">Payment Completed</div>
+  <h1>Thank You</h1>
+  <p class="page-subtitle center-shell">Your payment has been completed successfully.</p>
+</section>
+
+<div class="card text-center narrow-shell center-shell">
+  <h2>Please check your email</h2>
+  <p>The EmoScreen assessment form link has been mailed to the registered patient email address.</p>
+  <p>Please open the link from the email to complete the assessment.</p>
+  <p class="muted">Order code: {{ order.order_code }}</p>
+</div>
+{% endblock %}

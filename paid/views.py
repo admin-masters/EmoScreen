@@ -165,7 +165,7 @@ def patient_entry(request, order_code, doctor_code, form_code, final_amount_pais
     if order.final_amount_paise == 0:
         return redirect("paid:patient_form", order_code=order.order_code)
     if order.status == EsPayOrder.Status.PAID:
-        return redirect("paid:patient_form", order_code=order.order_code)
+        return redirect("paid:patient_payment_complete", order_code=order.order_code)
     return redirect("paid:patient_payment", order_code=order.order_code)
 
 
@@ -199,7 +199,8 @@ def patient_payment(request, order_code):
     if order.final_amount_paise <= 0:
         return redirect("paid:patient_form", order_code=order.order_code)
     if order.status == EsPayOrder.Status.PAID:
-        return redirect("paid:patient_form", order_code=order.order_code)
+        _send_assessment_link_email(order, request, workflow_case)
+        return redirect("paid:patient_payment_complete", order_code=order.order_code)
 
     payment_mode = getattr(settings, "PAYMENT_GATEWAY", "dummy").lower()
     if payment_mode != "razorpay":
@@ -253,7 +254,7 @@ def patient_payment(request, order_code):
             _create_revenue_split(tx)
             audit.mark_payment_completed(workflow_case, order, tx)
             _send_assessment_link_email(order, request, workflow_case)
-            return redirect("paid:patient_form", order_code=order.order_code)
+            return redirect("paid:patient_payment_complete", order_code=order.order_code)
 
         return render(
             request,
@@ -355,7 +356,7 @@ def patient_payment(request, order_code):
             _create_revenue_split(tx)
             audit.mark_payment_completed(workflow_case, order, tx)
             _send_assessment_link_email(order, request, workflow_case)
-            return redirect("paid:patient_form", order_code=order.order_code)
+            return redirect("paid:patient_payment_complete", order_code=order.order_code)
 
         tx.status = EsPayTransaction.Status.FAILED
         tx.raw_payload_json = payload
@@ -426,6 +427,22 @@ def razorpay_webhook(request):
         audit.mark_payment_failed(audit.case_for_order(tx.order), tx.order, tx, "Razorpay webhook marked payment failed.")
 
     return JsonResponse({"ok": True})
+
+
+@require_http_methods(["GET"])
+def patient_payment_complete(request, order_code):
+    order = get_object_or_404(EsPayOrder, order_code=order_code)
+    if _paid_order_is_final(order):
+        return redirect("paid:patient_thank_you", order_code=order.order_code)
+    if order.final_amount_paise <= 0:
+        return redirect("paid:patient_form", order_code=order.order_code)
+    if order.status != EsPayOrder.Status.PAID:
+        return redirect("paid:patient_payment", order_code=order.order_code)
+    return render(
+        request,
+        "paid/patient_payment_complete.html",
+        {"order": order, **JOURNEY_LOCKED_CONTEXT},
+    )
 
 
 @require_http_methods(["GET", "POST"])
@@ -693,39 +710,41 @@ def _send_assessment_link_email(order, request, workflow_case=None):
     if not order.patient_email:
         return None
 
-    existing_success = EsPayEmailLog.objects.filter(
-        order=order,
-        email_type=EsPayEmailLog.EmailType.PAYMENT_LINK,
-        status=EsPayEmailLog.Status.SENT,
-    ).exists()
-    if existing_success:
-        return None
+    with transaction.atomic():
+        order = EsPayOrder.objects.select_for_update().get(pk=order.pk)
+        existing_success = EsPayEmailLog.objects.filter(
+            order=order,
+            email_type=EsPayEmailLog.EmailType.PAYMENT_LINK,
+            status=EsPayEmailLog.Status.SENT,
+        ).exists()
+        if existing_success:
+            return None
 
-    link = request.build_absolute_uri(reverse("paid:patient_form", args=[order.order_code]))
-    subject = "EmoScreen Assessment Link"
-    patient_name = escape(order.patient_name or "Parent")
-    ok, meta = _sendgrid_send_with_attachments(
-        order.patient_email,
-        subject,
-        (
-            f"<p>Dear {patient_name}, Your doctor has prescribed EmoScreen service for you.</p>"
-            f"<p>Please complete the assessment by filling up the form at this link: "
-            f"<a href=\"{link}\">{link}</a></p>"
-            "<p>If you need help to understand any of the questions please take help from your doctor.</p>"
-            "<p>For any further queries or support, please send a WhatsApp message to: +91-8297634553.</p>"
-        ),
-        [],
-    )
-    delivery_status = _delivery_status(ok, meta)
-    email_log = log_email(
-        order,
-        "PAYMENT_LINK",
-        order.patient_email,
-        subject,
-        status=delivery_status,
-        error_text="" if ok else str(meta),
-        sendgrid_message_id=meta if ok else "",
-    )
+        link = request.build_absolute_uri(reverse("paid:patient_form", args=[order.order_code]))
+        subject = "EmoScreen Assessment Link"
+        patient_name = escape(order.patient_name or "Parent")
+        ok, meta = _sendgrid_send_with_attachments(
+            order.patient_email,
+            subject,
+            (
+                f"<p>Dear {patient_name}, Your doctor has prescribed EmoScreen service for you.</p>"
+                f"<p>Please complete the assessment by filling up the form at this link: "
+                f"<a href=\"{link}\">{link}</a></p>"
+                "<p>If you need help to understand any of the questions please take help from your doctor.</p>"
+                "<p>For any further queries or support, please send a WhatsApp message to: +91-8297634553.</p>"
+            ),
+            [],
+        )
+        delivery_status = _delivery_status(ok, meta)
+        email_log = log_email(
+            order,
+            "PAYMENT_LINK",
+            order.patient_email,
+            subject,
+            status=delivery_status,
+            error_text="" if ok else str(meta),
+            sendgrid_message_id=meta if ok else "",
+        )
     if workflow_case:
         audit.record_delivery(
             workflow_case,
