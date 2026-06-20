@@ -396,6 +396,26 @@ def terms_public(request):
     # Read-only Terms (no checkbox, no auth)
     return render(request, "content/terms_public.html")
 
+
+def privacy_policy(request):
+    return render(request, "content/privacy_policy.html")
+
+
+def terms_conditions(request):
+    return render(request, "content/terms_conditions.html")
+
+
+def doctor_caregiver_terms(request):
+    return render(request, "content/doctor_caregiver_terms.html")
+
+
+def cancellation_refund_policy(request):
+    return render(request, "content/cancellation_refund_policy.html")
+
+
+def contact_us(request):
+    return render(request, "content/contact_us.html")
+
 def auth_complete(request):
     """
     Called after Google login. We verify that the authenticated user's email
