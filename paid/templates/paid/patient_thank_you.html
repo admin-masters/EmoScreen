@@ -1,0 +1,24 @@
+{% extends "content/base.html" %}
+{% block content %}
+<section class="page-header text-center narrow-shell center-shell">
+  <div class="page-eyebrow center-shell">Assessment Submitted</div>
+  <h1>Thank You</h1>
+  <p class="page-subtitle center-shell">Your EmoScreen assessment has been submitted successfully.</p>
+</section>
+
+<div class="card text-center narrow-shell center-shell">
+  {% if report %}
+    <h2>Your report has been mailed</h2>
+    <p>Your EmoScreen report has been mailed to the registered email address.</p>
+    <p class="muted">You can also download your patient report below for your records.</p>
+    <div class="inline-actions center-shell">
+      <a class="btn btn-green" href="{% url 'paid:download_report' order.order_code 'patient' %}">Download Patient Report</a>
+    </div>
+    <p class="muted">Patient PDF password: first 4 letters of the child name + last 4 digits of the registered WhatsApp number.</p>
+  {% else %}
+    <h2>Report is being prepared</h2>
+    <p>Your report is being generated. Please refresh this page after a few minutes.</p>
+  {% endif %}
+  <p class="muted">Order code: {{ order.order_code }}</p>
+</div>
+{% endblock %}

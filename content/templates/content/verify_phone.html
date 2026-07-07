@@ -1,21 +1,26 @@
 {% extends "content/base.html" %}
 {% block content %}
-<h2>{{ ui.verify_title }}</h2>
+<section class="page-header text-center narrow-shell center-shell">
+  <div class="page-eyebrow center-shell">Verification</div>
+  <h1>{{ ui.verify_title }}</h1>
+</section>
 
 {% if error %}
-  <div class="card" style="border-color:#ef4444;color:#b91c1c">{{ error }}</div>
+  <div class="card alert-error centered-card">{{ error }}</div>
 {% else %}
-  <div class="muted">{{ ui.verify_subtitle }}</div>
+  <p class="page-subtitle center-shell text-center">{{ ui.verify_subtitle }}</p>
 {% endif %}
 
-<form method="post" class="card">
+<form method="post" class="card form-card centered-card">
   {% csrf_token %}
   <label>{{ ui.verify_label }}</label>
   <input type="tel" name="parent_phone" required placeholder="{{ ui.verify_placeholder }}" />
-  <button class="btn btn-green" type="submit">{{ ui.verify_button }}</button>
+  <div class="form-actions">
+    <button class="btn btn-green" type="submit">{{ ui.verify_button }}</button>
+  </div>
 </form>
 
-<p class="muted">
+<p class="muted text-center">
   {{ ui.verify_terms_prefix }}
   <a href="{% url 'content:terms_public' %}" target="_blank" rel="noopener">{{ ui.verify_terms_link }}</a>.
 </p>

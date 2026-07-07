@@ -1,124 +1,30 @@
 {% extends "content/base.html" %}
 {% block content %}
+<section class="page-header text-center narrow-shell center-shell">
+  <div class="page-eyebrow center-shell">Patient Access</div>
+  <h1>Start Screening</h1>
+  <p class="page-subtitle center-shell">Enter the clinic or doctor number and the parent's WhatsApp number to begin a secure screening flow.</p>
+</section>
 
-<style>
-  /* Center page content */
-  .page-container {
-    display: flex;
-    justify-content: center;
-    padding: 20px;
-  }
+{% if error %}
+  <div class="card alert-error centered-card">{{ error }}</div>
+{% endif %}
 
-  h2 {
-    text-align: center;
-    margin-bottom: 20px;
-  }
+<div class="card form-card centered-card">
+  <form method="post">
+    {% csrf_token %}
+    <label>Clinic / Doctor Number</label>
+    <input type="tel" name="clinic_phone" required placeholder="10-digit clinic/doctor number" />
 
-  /* Card styling */
-  .card {
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    padding: 20px;
-    width: 100%;
-    max-width: 560px;
-    margin: auto;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-  }
+    <label>Enter Parent's WhatsApp No.</label>
+    <input type="tel" name="parent_phone" required placeholder="10-digit WhatsApp number" />
 
-  /* Error card */
-  .card.error {
-    border-color:#ef4444;
-    color:#b91c1c;
-  }
-
-  /* Labels */
-  label {
-    display: block;
-    margin-top: 12px;
-    font-weight: 600;
-  }
-
-  /* Inputs */
-  input[type="tel"] {
-    width: 100%;
-    padding: 12px;
-    margin-top: 6px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 16px;
-  }
-
-  /* Submit button */
-  .btn-green {
-    width: 100%;
-    margin-top: 18px;
-    padding: 12px;
-    border-radius: 6px;
-    background: #22c55e;
-    color: #fff;
-    border: none;
-    font-size: 16px;
-    cursor: pointer;
-  }
-
-  .btn-green:hover {
-    background: #16a34a;
-  }
-
-  /* Muted text */
-  .muted {
-    color: #6b7280;
-    font-size: 14px;
-  }
-
-  /* Mobile responsiveness */
-  @media (max-width: 480px) {
-    .page-container {
-      padding: 10px;
-    }
-
-    .card {
-      padding: 16px;
-    }
-
-    h2 {
-      font-size: 22px;
-    }
-  }
-</style>
-
-<div class="page-container">
-  <div style="width:100%;max-width:560px;">
-    
-    <h2>Start Screening</h2>
-
-    {% if error %}
-      <div class="card error">{{ error }}</div>
-    {% endif %}
-
-    <div class="card">
-      <p class="muted">
-        Enter the clinic/doctor number and your WhatsApp number to begin.
-      </p>
-
-      <form method="post">
-        {% csrf_token %}
-        <label>Clinic / Doctor Number</label>
-        <input type="tel" name="clinic_phone" required placeholder="10-digit clinic/doctor number" />
-
-        <label>Enter Parent's WhatsApp No.</label>
-        <input type="tel" name="parent_phone" required placeholder="10-digit WhatsApp number" />
-
-        <button class="btn btn-green" type="submit">Continue</button>
-      </form>
-
-      <p class="muted" style="margin-top:8px">
-        You’ll confirm the same WhatsApp on the next screen, then select language to fill the form.
-      </p>
+    <div class="form-actions">
+      <button class="btn btn-green" type="submit">Continue</button>
     </div>
+  </form>
 
-  </div>
+  <p class="form-note">You’ll confirm the same WhatsApp on the next screen, then select language to fill the form.</p>
 </div>
 
 {% endblock %}

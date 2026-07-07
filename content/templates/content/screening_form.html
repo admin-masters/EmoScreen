@@ -1,13 +1,17 @@
 {% extends "content/base.html" %}
 {% block content %}
-<h2>{{ form_title|default:"Behavioral & Emotional Red Flags – Pre-consultation form" }}</h2>
+<section class="page-header">
+  <div class="page-eyebrow">Assessment</div>
+  <h1>{{ form_title|default:"Behavioral & Emotional Red Flags – Pre-consultation form" }}</h1>
+  {% if form_purpose %}<p class="page-subtitle">{{ form_purpose }}</p>{% endif %}
+</section>
 {% comment %} {% if form_purpose %}<p class="muted">{{ form_purpose }}</p>{% endif %} {% endcomment %}
 
 {% if error %}
-  <div class="card" style="border-color:#ef4444;color:#b91c1c">{{ error }}</div>
+  <div class="card alert-error">{{ error }}</div>
 {% endif %}
 
-<form method="post" class="card">
+<form method="post" class="card form-card">
   {% csrf_token %}
   <h3>Patient Details</h3>
 
@@ -57,7 +61,9 @@
     </div>
   {% endfor %}
 
-  <button class="btn btn-green" type="submit">{{ ui.submit }}</button>
-  <p class="muted">{{ ui.all_fields_mandatory }}</p>
+  <div class="form-actions">
+    <button class="btn btn-green" type="submit">{{ ui.submit }}</button>
+  </div>
+  <p class="form-note">{{ ui.all_fields_mandatory }}</p>
 </form>
 {% endblock %}

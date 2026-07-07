@@ -32,6 +32,11 @@ urlpatterns = [
     path("verify/<code>/", views.verify_phone, name="verify_phone"),
     path("terms/<code>/", views.terms_accept, name="terms_accept"),
     path("terms/", views.terms_public, name="terms_public"),
+    path("privacy-policy/", views.privacy_policy, name="privacy_policy"),
+    path("terms-and-conditions/", views.terms_conditions, name="terms_conditions"),
+    path("doctor-caregiver-terms/", views.doctor_caregiver_terms, name="doctor_caregiver_terms"),
+    path("cancellation-refund-policy/", views.cancellation_refund_policy, name="cancellation_refund_policy"),
+    path("contact/", views.contact_us, name="contact_us"),
 
     # Share / QR codes
     path("share/<code>/", views.share_landing, name="share_landing"),

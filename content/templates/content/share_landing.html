@@ -1,15 +1,17 @@
 {% extends "content/base.html" %}
 
 {% block content %}
-
-<h2>Start Screening</h2>
+<section class="page-header text-center narrow-shell center-shell">
+  <div class="page-eyebrow center-shell">Shared Link</div>
+  <h1>Start Screening</h1>
+  <p class="page-subtitle center-shell">Use the clinic details and parent WhatsApp number to begin from a shared landing page.</p>
+</section>
 
 {% if error %}
-  <div class="card" style="border-color:#ef4444;color:#b91c1c">{{ error }}</div>
+  <div class="card alert-error centered-card">{{ error }}</div>
 {% endif %}
 
-<!-- Center the card and make it responsive -->
-<div class="card" style="max-width:560px; margin: 0 auto; padding: 1.5rem;">
+<div class="card form-card centered-card">
   <p class="muted">
     Please enter the clinic’s phone number and your WhatsApp number to begin.
   </p>
@@ -24,41 +26,5 @@
     <button class="btn btn-green" type="submit">Continue</button>
   </form>
 </div>
-
-
 {% endblock %}
-
-<style>
-  /* Make sure the card is centered on mobile */
-  .card {
-    margin: 0 auto;
-    max-width: 560px; /* This keeps the width of the form centered */
-    padding: 1.5rem;
-  }
-
-  /* Adjust input fields and button to be full-width on smaller screens */
-  input[type="tel"], button {
-    width: 100%;
-    margin-bottom: 1rem;
-  }
-
-  /* Responsive adjustments for small screens */
-  @media (max-width: 639px) {
-    h2 {
-      font-size: 1.5rem;
-    }
-
-    .card {
-      padding: 1.25rem; /* Adjust padding for mobile */
-    }
-
-    input[type="tel"] {
-      font-size: 1rem;
-    }
-
-    button {
-      padding: 1rem;
-    }
-  }
-</style>
 

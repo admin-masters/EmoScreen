@@ -1,18 +1,22 @@
 {% extends "content/base.html" %}
 
 {% block content %}
-<h2>Doctor Education</h2>  {# This remains unchanged #}
+<section class="page-header">
+  <div class="page-eyebrow">Clinical Guidance</div>
+  <h1>Doctor Education</h1>
+  <p class="page-subtitle">Reference-ready educational support linked to the identified behavioral and emotional concern.</p>
+</section>
 
 <div class="card">
-  <h3>{{ rf_title }}</h3>  {# Replace RF_ code here only #}
+  <h3>{{ rf_title }}</h3>
   <div>{{ de.education_markdown|safe }}</div>
 
   {% if de.reference_1 %}
-    <p><a href="{{ de.reference_1 }}" target="_blank" rel="noopener">Reference 1</a></p>
+    <p><a class="btn" href="{{ de.reference_1 }}" target="_blank" rel="noopener">Reference 1</a></p>
   {% endif %}
 
   {% if de.reference_2 %}
-    <p><a href="{{ de.reference_2 }}" target="_blank" rel="noopener">Reference 2</a></p>
+    <p><a class="btn" href="{{ de.reference_2 }}" target="_blank" rel="noopener">Reference 2</a></p>
   {% endif %}
 </div>
 {% endblock %}

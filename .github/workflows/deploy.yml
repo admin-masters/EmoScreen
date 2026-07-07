@@ -1,22 +1,47 @@
-name: Deploy EmoScreen to EC2
+name: Deploy EmoScreen Staging to EC2
 
 on:
   push:
     branches:
-      - main
+      - Staging
+  workflow_dispatch:
+
+concurrency:
+  group: emoscreen-staging-deploy
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  deploy-staging:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH
+      - name: Deploy Staging via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ secrets.EC2_IP }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
             cd /var/www/EmoScreen
-            chmod +x scripts/deploy.sh
-            ./scripts/deploy.sh
+
+            if ! git diff --quiet -- scripts/deploy.sh; then
+              echo "Preserving local scripts/deploy.sh change before deployment pull"
+              git stash push -m "pre-deploy scripts/deploy.sh $(date -u +%Y%m%d%H%M%S)" -- scripts/deploy.sh
+            fi
+
+            git fetch origin Staging
+            if git show-ref --verify --quiet refs/heads/Staging; then
+              git checkout Staging
+            else
+              git checkout -b Staging origin/Staging
+            fi
+            git pull --ff-only origin Staging
+
+            DEPLOY_ENV=staging \
+            DEPLOY_BRANCH=Staging \
+            DJANGO_DEBUG=true \
+            ALLOWED_HOSTS=127.0.0.1,localhost,emo.stage.cpdinclinic.co.in \
+            CSRF_TRUSTED_ORIGINS=https://emo.stage.cpdinclinic.co.in \
+            FORCE_HTTPS=true \
+            bash scripts/deploy.sh

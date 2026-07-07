@@ -1,8 +1,13 @@
 {% extends "content/base.html" %}
 {% load static %}
 {% block content %}
-<h2>Doctor Registration Form</h2>
-<form method="post" enctype="multipart/form-data" class="card">
+<section class="page-header">
+  <div class="page-eyebrow">Onboarding</div>
+
+  <h1>Doctor Registration Form</h1>
+  <p class="page-subtitle">Set up a clinical profile to share secure behavioral and emotional screening links with patients and caregivers.</p>
+</section>
+<form method="post" enctype="multipart/form-data" class="card form-card centered-card">
   {% csrf_token %}
   {{ form.as_p }}
   <button class="btn btn-green" type="submit">Submit</button>
@@ -14,11 +19,8 @@
   var email = document.getElementById("id_email");
   if (!email) return;
 
-  // Build a prefix input right after the label for email (UI only)
   var wrapper = document.createElement("div");
-  wrapper.style.display = "flex";
-  wrapper.style.alignItems = "center";
-  wrapper.style.gap = "6px";
+  wrapper.className = "email-prefix-group";
 
   var prefix = document.createElement("input");
   prefix.type = "text";
@@ -26,16 +28,16 @@
   prefix.required = true;
   prefix.pattern = "[A-Za-z0-9._%+-]+";
   prefix.placeholder = "your.name";
-  prefix.style.flex = "0 1 240px";
+  prefix.className = "email-prefix-input";
 
   var suffix = document.createElement("span");
   suffix.textContent = "@gmail.com";
+  suffix.className = "email-prefix-suffix";
 
   email.parentNode.insertBefore(wrapper, email);
   wrapper.appendChild(prefix);
   wrapper.appendChild(suffix);
 
-  // Hide original email input
   email.type = "hidden";
 
   var v = (email.value || "");

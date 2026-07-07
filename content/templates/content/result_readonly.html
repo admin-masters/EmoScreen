@@ -1,13 +1,16 @@
 {% extends "content/base.html" %}
 {% block content %}
-<h2>Report {{ report_code }}</h2>
+<section class="page-header">
+  <div class="page-eyebrow">Clinical Review</div>
+  <h1>Report {{ report_code }}</h1>
+</section>
 <div class="card">
   {% if rf_labels %}
-    <ul>{% for label in rf_labels %}<li>{{ label }}</li>{% endfor %}</ul>
+    <ul class="summary-list">{% for label in rf_labels %}<li>{{ label }}</li>{% endfor %}</ul>
     <h4>Doctor Education</h4>
-    <ul>
+    <ul class="list-clean">
       {% for link in education_links %}
-        <li><a href="{{ link }}" target="_blank">Open</a></li>
+        <li><a class="btn btn-sm" href="{{ link }}" target="_blank">Open</a></li>
       {% endfor %}
     </ul>
   {% else %}

@@ -1,43 +1,181 @@
 {% extends "content/base.html" %}
 
 {% block content %}
-<h2>Send Form to Parent</h2>
+<section class="page-header">
+  <div class="page-eyebrow">Clinic Console</div>
+  <h1>Send Form to Parent</h1>
+  <p class="page-subtitle">Share multilingual screening links or paid age-band forms with a calm, guided parent experience.</p>
+</section>
 
-<form method="post" class="card">
+<div class="grid-2">
+<form method="post" class="card form-card clinic-share-form" data-clinic-share-form>
   {% csrf_token %}
-  <label>Enter Parent's WhatsApp No.</label>
-  {{ form.parent_whatsapp }}
-  <label>Select Language</label>
-  {{ form.language }}
-  <div style="margin-top:10px">
+  {{ form.non_field_errors }}
+
+  <div class="form-section">
+    <div class="form-section-title">
+      <span class="step-badge">1</span>
+      <div>
+        <h3>Choose Assessment</h3>
+      </div>
+    </div>
+
+    <div class="form-field">
+      <label for="{{ form.share_form.id_for_label }}">Select Form</label>
+      {{ form.share_form }}
+      {{ form.share_form.errors }}
+    </div>
+
+    <div id="language-wrap" class="form-field is-hidden" data-free-only>
+      <label for="{{ form.language.id_for_label }}">Select Language</label>
+      {{ form.language }}
+      {{ form.language.errors }}
+    </div>
+
+    <div id="paid-amount-wrap" class="form-field is-hidden" data-paid-only>
+      <label for="{{ form.price_variant.id_for_label }}">Form Amount</label>
+      {{ form.price_variant }}
+      {{ form.price_variant.errors }}
+    </div>
+
+    <div id="discount-wrap" class="form-field is-hidden" data-discount-only>
+      <label for="{{ form.discount_percent.id_for_label }}">Discount Percent (optional)</label>
+      <input
+        type="number"
+        name="{{ form.discount_percent.html_name }}"
+        id="{{ form.discount_percent.id_for_label }}"
+        min="0"
+        max="100"
+        step="0.01"
+        inputmode="decimal"
+        placeholder="0"
+        value="{{ form.discount_percent.value|default_if_none:'' }}"
+      >
+      {{ form.discount_percent.errors }}
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">
+      <span class="step-badge">2</span>
+      <div>
+        <h3>Patient Details</h3>
+        <p>Enter the recipient details needed for WhatsApp and report delivery.</p>
+      </div>
+    </div>
+
+    <div id="paid-name-wrap" class="form-field is-hidden" data-paid-only>
+      <label for="{{ form.patient_name.id_for_label }}">Patient Name</label>
+      {{ form.patient_name }}
+      {{ form.patient_name.errors }}
+    </div>
+
+    <div class="form-field">
+      <label id="parent-whatsapp-label" for="{{ form.parent_whatsapp.id_for_label }}">Parent WhatsApp Number</label>
+      {{ form.parent_whatsapp }}
+      {{ form.parent_whatsapp.errors }}
+    </div>
+
+    <div id="paid-contact-wrap" class="form-field is-hidden" data-paid-only>
+      <label for="{{ form.patient_email.id_for_label }}">Patient Email</label>
+      {{ form.patient_email }}
+      {{ form.patient_email.errors }}
+    </div>
+  </div>
+
+  <div class="form-actions">
     <button class="btn btn-green" type="submit">Send via WhatsApp</button>
   </div>
-  <p class="muted">We’ll open WhatsApp with a pre‑filled message in the selected language that contains the patient link.</p>
 </form>
 
-<div class="card" style="margin-bottom:16px">
-  <h3>Bulk Share (QR & Link)</h3>
-  <p class="muted">Patients can scan this QR or open the link to start the screening on their own.</p>
-  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
-    <img src="{% url 'content:doctor_qr_svg' pro.unique_doctor_code %}" alt="Clinic QR"
-         style="width:180px;height:auto;border:1px solid #eee;padding:4px;background:#fff" />
+<div class="card hero-panel">
+  <div class="stack-sm">
+    <div class="page-eyebrow">Sharing Tools</div>
+    <h3>Bulk Share via QR or Direct Link</h3>
+    <p class="muted">Patients can scan the QR or open the link directly to start the screening journey on their own device.</p>
+  </div>
 
-    <div style="min-width:280px">
-      <div><strong>Share Link:</strong></div>
-      <div class="mono" style="word-break:break-all">{{ share_url }}</div>
+  <div class="qr-panel">
+    <div class="qr-art">
+      <img src="{% url 'content:doctor_qr_svg' pro.unique_doctor_code %}" alt="Clinic QR">
+    </div>
 
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn" type="button"
-                onclick="navigator.clipboard.writeText('{{ share_url }}')">Copy Link</button>
-        <a class="btn" href="{% url 'content:doctor_qr_svg' pro.unique_doctor_code %}?download=1">
-          Download QR
-        </a>
-        <a class="btn" target="_blank" rel="noopener"
-           href="{% url 'content:share_landing' pro.unique_doctor_code %}">Open</a>
+    <div class="stack-sm">
+      <div>
+        <strong>Share Link</strong>
+        <div class="mono break-all">{{ share_url }}</div>
+      </div>
+      <div class="inline-actions">
+        <button class="btn" type="button" data-copy-text="{{ share_url }}">Copy Link</button>
+        <a class="btn" href="{% url 'content:doctor_qr_svg' pro.unique_doctor_code %}?download=1">Download QR</a>
+        <a class="btn btn-green" target="_blank" rel="noopener" href="{% url 'content:share_landing' pro.unique_doctor_code %}">Open</a>
       </div>
     </div>
   </div>
 </div>
+</div>
 
+<script>
+  (function () {
+    const formSelect = document.getElementById("id_share_form");
+    const freeOnlyPanels = document.querySelectorAll("[data-free-only]");
+    const paidOnlyPanels = document.querySelectorAll("[data-paid-only]");
+    const discountOnlyPanels = document.querySelectorAll("[data-discount-only]");
+    const languageInput = document.getElementById("id_language");
+    const patientName = document.getElementById("id_patient_name");
+    const patientEmail = document.getElementById("id_patient_email");
+    const priceVariant = document.getElementById("id_price_variant");
+    const discountPercent = document.getElementById("id_discount_percent");
+    const whatsappLabel = document.getElementById("parent-whatsapp-label");
+    const allowedPrices = new Set(["INR_499", "INR_1", "INR_0"]);
 
+    function pruneAmountOptions() {
+      if (!priceVariant) return;
+      Array.from(priceVariant.options).forEach(function (option) {
+        if (option.value && !allowedPrices.has(option.value)) {
+          option.remove();
+        }
+      });
+      if (!allowedPrices.has(priceVariant.value)) {
+        priceVariant.value = "INR_499";
+      }
+    }
+
+    function setPanelState(panels, isVisible) {
+      panels.forEach(function (panel) {
+        panel.classList.toggle("is-hidden", !isVisible);
+        panel.querySelectorAll("input, select, textarea").forEach(function (field) {
+          field.disabled = !isVisible;
+        });
+      });
+    }
+
+    function syncMode() {
+      const val = formSelect ? formSelect.value : "";
+      const hasSelection = Boolean(val);
+      const isPaid = val.startsWith("P:");
+      const isDiscountable = isPaid && priceVariant && priceVariant.value === "INR_499";
+      setPanelState(freeOnlyPanels, hasSelection && !isPaid);
+      setPanelState(paidOnlyPanels, isPaid);
+      setPanelState(discountOnlyPanels, isDiscountable);
+      if (languageInput) languageInput.required = hasSelection && !isPaid;
+      if (patientName) patientName.required = isPaid;
+      if (patientEmail) patientEmail.required = isPaid;
+      if (priceVariant) priceVariant.required = isPaid;
+      if (discountPercent) {
+        discountPercent.required = false;
+        if (!isDiscountable) discountPercent.value = "";
+      }
+      if (whatsappLabel) {
+        whatsappLabel.textContent = isPaid ? "Parent / Patient WhatsApp Number" : "Parent WhatsApp Number";
+      }
+    }
+    pruneAmountOptions();
+    if (formSelect) {
+      formSelect.addEventListener("change", syncMode);
+      if (priceVariant) priceVariant.addEventListener("change", syncMode);
+      syncMode();
+    }
+  })();
+</script>
 {% endblock %}

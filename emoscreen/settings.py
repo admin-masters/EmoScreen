@@ -12,13 +12,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Local development .env
 LOCAL_ENV = BASE_DIR / ".env"
 
+# Deployment-specific non-secret settings written by scripts/deploy.sh
+DEPLOY_ENV_FILE = BASE_DIR / ".deploy_env"
+
 # Production secrets file
 PROD_ENV = Path("/var/www/secrets/.env")
 
 if PROD_ENV.exists():
-    load_dotenv(PROD_ENV)
+    load_dotenv(PROD_ENV, override=True)
 elif LOCAL_ENV.exists():
     load_dotenv(LOCAL_ENV)
+
+if DEPLOY_ENV_FILE.exists():
+    load_dotenv(DEPLOY_ENV_FILE, override=True)
 
 # --------------------------------------------------
 # Security
@@ -28,11 +34,36 @@ SECRET_KEY = os.getenv("SECRET_KEY", "unsafe-secret-key-change-me")
 
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = os.getenv(
-    "ALLOWED_HOSTS",
-    "127.0.0.1,localhost"
-).split(",")
 
+def csv_env(name, default):
+    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
+
+def bool_env(name, default=False):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def int_env(name, default=0):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+ALLOWED_HOSTS = csv_env(
+    "ALLOWED_HOSTS",
+    "127.0.0.1,localhost,emo.stage.cpdinclinic.co.in,emo.cpdinclinic.co.in,www.emo.cpdinclinic.co.in",
+)
+CSRF_TRUSTED_ORIGINS = csv_env(
+    "CSRF_TRUSTED_ORIGINS",
+    "https://emo.stage.cpdinclinic.co.in,https://emo.cpdinclinic.co.in,https://www.emo.cpdinclinic.co.in",
+)
 # --------------------------------------------------
 # Applications
 # --------------------------------------------------
@@ -45,6 +76,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "content",
+    "paid",
     "social_django",
 ]
 
@@ -85,20 +117,34 @@ TEMPLATES = [{
 # Database
 # --------------------------------------------------
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.mysql",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT", "3306"),
-        "OPTIONS": {
-            "charset": "utf8mb4",
-            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-        },
+DB_ENGINE = os.getenv("DB_ENGINE", "sqlite" if not os.getenv("DB_NAME") else "mysql").lower()
+SQLITE_PATH = os.getenv("SQLITE_PATH", "db.sqlite3")
+
+if DB_ENGINE == "sqlite":
+    sqlite_name = Path(SQLITE_PATH)
+    if not sqlite_name.is_absolute():
+        sqlite_name = BASE_DIR / sqlite_name
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": sqlite_name,
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.getenv("DB_NAME"),
+            "USER": os.getenv("DB_USER"),
+            "PASSWORD": os.getenv("DB_PASSWORD"),
+            "HOST": os.getenv("DB_HOST"),
+            "PORT": os.getenv("DB_PORT", "3306"),
+            "OPTIONS": {
+                "charset": "utf8mb4",
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        }
+    }
 
 # --------------------------------------------------
 # Static / Media
@@ -106,6 +152,7 @@ DATABASES = {
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -126,8 +173,39 @@ SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")
 
 REPORT_FROM_NAME = os.getenv("REPORT_FROM_NAME", "EmoScreen")
+SUPPORT_PHONE_DISPLAY = os.getenv("SUPPORT_PHONE_DISPLAY", "+91-9321450803")
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = bool_env("EMAIL_USE_TLS", True)
+EMAIL_USE_SSL = bool_env("EMAIL_USE_SSL", False)
+SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+
+# --------------------------------------------------
+# Payments
+# --------------------------------------------------
+
+# Local development defaults to a fully local dummy gateway. Set
+# PAYMENT_GATEWAY=razorpay only when real Razorpay keys are configured safely.
+PAYMENT_GATEWAY = os.getenv("PAYMENT_GATEWAY", "dummy").lower()
+
+RAZORPAY_LIVE_MODE = bool_env("RAZORPAY_LIVE_MODE", False)
+
+RAZORPAY_KEY_ID_TEST = os.getenv("RAZORPAY_KEY_ID_TEST", "")
+RAZORPAY_KEY_SECRET_TEST = os.getenv("RAZORPAY_KEY_SECRET_TEST", "")
+RAZORPAY_WEBHOOK_SECRET_TEST = os.getenv("RAZORPAY_WEBHOOK_SECRET_TEST", "")
+
+RAZORPAY_KEY_ID_LIVE = os.getenv("RAZORPAY_KEY_ID_LIVE", "")
+RAZORPAY_KEY_SECRET_LIVE = os.getenv("RAZORPAY_KEY_SECRET_LIVE", "")
+RAZORPAY_WEBHOOK_SECRET_LIVE = os.getenv("RAZORPAY_WEBHOOK_SECRET_LIVE", "")
+
+# Backward-compatible aliases if a single-mode deployment uses generic names.
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
 
 # --------------------------------------------------
 # AiSensy
@@ -136,6 +214,13 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 AISENSY_API_KEY = os.getenv("AISENSY_API_KEY", "")
 
 AISENSY_CAMPAIGN_NAME = os.getenv("AISENSY_CAMPAIGN_NAME", "")
+AISENSY_PARAM_COUNT = int_env("AISENSY_PARAM_COUNT", 3)
+
+AISENSY_PAID_ASSESSMENT_CAMPAIGN_NAME = os.getenv(
+    "AISENSY_PAID_ASSESSMENT_CAMPAIGN_NAME",
+    "mha_order_processing",
+)
+AISENSY_PAID_ASSESSMENT_PARAM_COUNT = int_env("AISENSY_PAID_ASSESSMENT_PARAM_COUNT", 2)
 
 # --------------------------------------------------
 # Public Self Screen Defaults
@@ -168,7 +253,7 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = ["email", "profile"]
 SOCIAL_AUTH_REDIRECT_IS_HTTPS = os.getenv(
     "FORCE_HTTPS",
     "false"
-).lower() == "true"
+).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
@@ -179,7 +264,7 @@ CSRF_COOKIE_SAMESITE = "Lax"
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = os.getenv("TIME_ZONE", "Asia/Kolkata")
 
 USE_I18N = True
 USE_TZ = True

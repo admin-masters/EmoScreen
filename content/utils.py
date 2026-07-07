@@ -173,15 +173,17 @@ def _ensure_param_count(params, expected):
         p = p[:expected]
     return p
 
-def _aisensy_send(destination_digits: str, username: str, template_params):
+def _aisensy_send(destination_digits: str, username: str, template_params, *, campaign_name=None, param_count=None):
     """
-    Trigger AiSensy template.
-    Your approved template (screenshot) has **three** placeholders: {1} Name, {2} Link, {3} How-to.  :contentReference[oaicite:4]{index=4}
-    We therefore send exactly three params in this order.
+    Trigger an AiSensy campaign template.
+    Campaign-specific callers can override the campaign name and placeholder count.
     """
     api_key = getattr(settings, "AISENSY_API_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjYzZjBkNDBlMzMxNjBhNzE5ODNhOTdjMCIsIm5hbWUiOiJJbmRpdGVjaCIsImFwcE5hbWUiOiJBaVNlbnN5IiwiY2xpZW50SWQiOiI2M2YwZDQwZTMzMTYwYTcxOTgzYTk3YmIiLCJhY3RpdmVQbGFuIjoiQkFTSUNfTU9OVEhMWSIsImlhdCI6MTY3NjcyNzMxMH0.pgz-k3jtvpn3WCYDmQ8MXyf1BR4xG-4yqYnm3d0SLeU")
-    campaign = getattr(settings, "AISENSY_CAMPAIGN_NAME", "emoscreennew1509_1")
-    expected_count = int(getattr(settings, "AISENSY_PARAM_COUNT", 3))  # default to 3
+    campaign = campaign_name or getattr(settings, "AISENSY_CAMPAIGN_NAME", "emoscreennew1509_1")
+    try:
+        expected_count = int(param_count if param_count is not None else getattr(settings, "AISENSY_PARAM_COUNT", 3))
+    except (TypeError, ValueError):
+        expected_count = 3
 
     if not api_key:
         print("[AiSensy] missing API key; skipping")

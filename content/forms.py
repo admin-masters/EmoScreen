@@ -3,6 +3,7 @@ from django import forms
 from .models import RegisteredProfessional
 from .utils import normalize_phone
 from .state_districts import state_choices, district_choices, is_valid_pair
+from paid.pricing import PRICE_CHOICES, PRICE_INR_499
 
 SALUTATIONS = [("Dr", "Dr."), ("Mr", "Mr."), ("Ms", "Ms."), ("Mrs", "Mrs.")]
 
@@ -122,19 +123,65 @@ class CaregiverForm(forms.ModelForm):
 
 
 class ClinicSendForm(forms.Form):
+    share_form = forms.ChoiceField(choices=[], label="Select Form")
     parent_whatsapp = forms.CharField(
         label="Enter Parent's WhatsApp No.",
         max_length=20
     )
-    language = forms.ChoiceField(choices=[], label="Select Language")
+    language = forms.ChoiceField(choices=[], label="Select Language", required=False)
+    patient_name = forms.CharField(label="Patient Name (for paid form)", max_length=255, required=False)
+    patient_email = forms.EmailField(label="Patient Email (for paid report)", required=False)
+    price_variant = forms.ChoiceField(
+        label="Form Amount",
+        required=False,
+        choices=PRICE_CHOICES,
+        initial="INR_0",
+    )
+    discount_percent = forms.DecimalField(
+        label="Discount Percent (optional)",
+        max_digits=5,
+        decimal_places=2,
+        min_value=0,
+        max_value=100,
+        required=False,
+    )
 
     def __init__(self, *args, **kwargs):
         lang_choices = kwargs.pop("lang_choices", [])
+        form_choices = kwargs.pop("form_choices", [])
         super().__init__(*args, **kwargs)
         self.fields["language"].choices = lang_choices
+        self.fields["share_form"].choices = form_choices
+        self.fields["share_form"].widget.attrs.update({"data-share-form-select": "true"})
+        self.fields["patient_name"].widget.attrs.update({"placeholder": "Child / patient name"})
+        self.fields["parent_whatsapp"].widget.attrs.update({"placeholder": "10-digit parent WhatsApp number"})
+        self.fields["patient_email"].widget.attrs.update({"placeholder": "parent@example.com"})
+        self.fields["discount_percent"].widget.attrs.update({"placeholder": "0"})
 
     def clean_parent_whatsapp(self):
         return normalize_phone(self.cleaned_data["parent_whatsapp"])
+
+    def clean(self):
+        data = super().clean()
+        selected_form = data.get("share_form") or ""
+        if not selected_form:
+            return data
+
+        is_paid = selected_form.startswith("P:")
+
+        if is_paid:
+            if not data.get("price_variant"):
+                self.add_error("price_variant", "Please select the form amount.")
+            if not data.get("patient_name"):
+                self.add_error("patient_name", "Patient name is required for paid forms.")
+            if not data.get("patient_email"):
+                self.add_error("patient_email", "Patient email is required for paid reports.")
+            if data.get("price_variant") != PRICE_INR_499 and data.get("discount_percent"):
+                self.add_error("discount_percent", "Discount is available only for the ₹499 form amount.")
+        elif not data.get("language"):
+            self.add_error("language", "Please select a language for the free screening form.")
+
+        return data
 
 
 class BulkDoctorUploadForm(forms.Form):

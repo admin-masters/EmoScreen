@@ -1,0 +1,11 @@
+.venv/
+.env
+.deploy_env
+db.sqlite3
+staticfiles/
+__pycache__/
+*.py[cod]
+.DS_Store
+media/paid_reports/
+docs/e2e_testing/guide_data.json
+docs/e2e_testing/rendered/

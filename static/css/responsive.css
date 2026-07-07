@@ -1,0 +1,157 @@
+@media (max-width: 1024px) {
+  .grid-3,
+  .stats-grid,
+  .grid-2,
+  .payment-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .provider-shell,
+  .qr-panel {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .provider-shell {
+    justify-items: stretch;
+  }
+
+  .provider-aside {
+    max-width: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .nav-toggle {
+    display: inline-flex;
+  }
+
+  .nav-menu {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: calc(100% + 10px);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 14px;
+    border-radius: 18px;
+    border: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  }
+
+  .site-header.is-open .nav-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .nav-link,
+  .btn-nav {
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    width: min(var(--container-width), calc(100% - 20px));
+  }
+
+  .page-shell {
+    padding: 24px 0 48px;
+  }
+
+  .provider-banner {
+    padding-top: 16px;
+  }
+
+  .provider-shell,
+  .surface-card,
+  .card,
+  .form-card,
+  .metric-card,
+  .stat-card {
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  .provider-profile {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .provider-avatar,
+  .provider-avatar--placeholder {
+    width: 72px;
+    height: 72px;
+  }
+
+  .btn-grid,
+  .action-grid,
+  .metric-grid,
+  .hero-actions,
+  .inline-actions {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .hero-actions .btn,
+  .hero-actions .btn-green,
+  .hero-actions .btn-red,
+  .inline-actions .btn,
+  .inline-actions .btn-green,
+  .inline-actions .btn-red {
+    width: 100%;
+  }
+
+  table {
+    min-width: 560px;
+  }
+}
+
+@media (max-width: 520px) {
+  h1 {
+    font-size: 2rem;
+  }
+
+  h2 {
+    font-size: 1.6rem;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+  }
+
+  .brand-copy small {
+    display: none;
+  }
+
+  .provider-meta {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .footer-shell,
+  .footer-links {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .footer-links {
+    gap: 8px;
+  }
+
+  .email-prefix-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .email-prefix-suffix {
+    text-align: center;
+  }
+}

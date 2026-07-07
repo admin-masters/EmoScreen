@@ -1,0 +1,135 @@
+{% extends "content/base.html" %}
+{% block content %}
+<section class="page-header">
+  <div class="page-eyebrow">Admin report delivery</div>
+  <h1>Report Delivery</h1>
+  <p class="page-intro">{{ case.case_code }}{% if order %} · Order {{ order.order_code }}{% endif %}</p>
+</section>
+
+<section class="card">
+  {% if notice %}
+    <p class="alert alert-info">{{ notice }}</p>
+  {% endif %}
+  <div class="form-actions">
+    <a class="btn" href="{% url 'paid:workflow_detail' case.case_code %}">Back to Workflow</a>
+    <a class="btn" href="{% url 'paid:workflow_dashboard' %}">Workflow Dashboard</a>
+    {% if order and report %}
+      <a class="btn" href="{% url 'paid:download_report' order.order_code 'patient' %}">Download Patient Report</a>
+      <a class="btn" href="{% url 'paid:download_report' order.order_code 'doctor' %}">Download Doctor Report</a>
+    {% endif %}
+  </div>
+</section>
+
+<section class="detail-grid">
+  <div class="card">
+    <div class="page-eyebrow">Patient report</div>
+    <h2>{{ latest_patient_status|default:"Pending" }}</h2>
+    <p><strong>Patient:</strong> {{ case.patient_name|default:"-" }}</p>
+    <p><strong>Email:</strong> {{ order.patient_email|default:case.patient_email|default:"-" }}</p>
+    {% if latest_patient_log %}
+      <p class="muted">Latest attempt: {{ latest_patient_log.created_at|date:"d M Y, h:i A" }} IST</p>
+      {% if latest_patient_log.error_text %}<p class="alert alert-error">{{ latest_patient_log.error_text }}</p>{% endif %}
+    {% endif %}
+    {% if report %}
+      <form method="post" class="stack-sm">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="send_patient_report">
+        {% if patient_email_form %}
+          {{ patient_email_form.as_p }}
+        {% endif %}
+        <button class="btn btn-green" type="submit">
+          {% if latest_patient_log %}Retry Patient Email{% else %}Send Patient Email{% endif %}
+        </button>
+      </form>
+    {% else %}
+      <p class="muted">Generate the report before sending the patient copy.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="page-eyebrow">Doctor report</div>
+    <h2>{{ latest_doctor_status|default:"Pending" }}</h2>
+    <p><strong>Doctor:</strong> {{ case.doctor_name_snapshot|default:"-" }}</p>
+    <p><strong>Email:</strong> {{ case.doctor.email|default:"-" }}</p>
+    {% if latest_doctor_log %}
+      <p class="muted">Latest attempt: {{ latest_doctor_log.created_at|date:"d M Y, h:i A" }} IST</p>
+      {% if latest_doctor_log.error_text %}<p class="alert alert-error">{{ latest_doctor_log.error_text }}</p>{% endif %}
+    {% endif %}
+    {% if report %}
+      <form method="post" class="stack-sm">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="send_doctor_report">
+        <button class="btn btn-green" type="submit">
+          {% if latest_doctor_log %}Retry Doctor Email{% else %}Send Doctor Email{% endif %}
+        </button>
+      </form>
+    {% else %}
+      <p class="muted">Generate the report before sending the doctor copy.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="page-eyebrow">Report file</div>
+    {% if report %}
+      <h2>Generated</h2>
+      <p><strong>Generated:</strong> {{ report.generated_at|date:"d M Y, h:i A" }} IST</p>
+      {% if report_tracking %}
+        <p><strong>Tracking:</strong> {{ report_tracking.get_status_display }}</p>
+        <p><strong>Patient delivery:</strong> {{ report_tracking.patient_delivery_status|default:"-" }}</p>
+        <p><strong>Doctor delivery:</strong> {{ report_tracking.doctor_delivery_status|default:"-" }}</p>
+      {% endif %}
+    {% else %}
+      <h2>Not generated</h2>
+      <p class="muted">No report file has been generated for this workflow yet.</p>
+    {% endif %}
+    {% if order and submission %}
+      <form method="post" class="stack-sm">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="refresh_report">
+        <button class="btn" type="submit">{% if report %}Regenerate Report{% else %}Generate Report{% endif %}</button>
+      </form>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card table-card">
+  <div class="page-eyebrow">Delivery attempts</div>
+  <h2>Email History</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Type</th>
+          <th>Recipient</th>
+          <th>Status</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in patient_logs %}
+          <tr>
+            <td>{{ log.created_at|date:"Y-m-d H:i:s" }} IST</td>
+            <td>Patient report</td>
+            <td>{{ log.to_email }}</td>
+            <td>{{ log.status }}</td>
+            <td>{{ log.error_text|default:"-" }}</td>
+          </tr>
+        {% endfor %}
+        {% for log in doctor_logs %}
+          <tr>
+            <td>{{ log.created_at|date:"Y-m-d H:i:s" }} IST</td>
+            <td>Doctor report</td>
+            <td>{{ log.to_email }}</td>
+            <td>{{ log.status }}</td>
+            <td>{{ log.error_text|default:"-" }}</td>
+          </tr>
+        {% endfor %}
+        {% if not patient_logs and not doctor_logs %}
+          <tr><td colspan="5">No report email attempts recorded.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

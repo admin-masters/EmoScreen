@@ -1,11 +1,15 @@
 {% extends "content/base.html" %}
 {% block content %}
-<h2>{{ result_title|default:"Your Reporting" }}</h2>
+<section class="page-header text-center narrow-shell center-shell">
+  <div class="page-eyebrow center-shell">Screening Result</div>
+  <h1>{{ result_title|default:"Your Reporting" }}</h1>
+  <p class="page-subtitle center-shell">A clear summary of the submitted screening, designed to support next-step care and follow-up.</p>
+</section>
 <div class="card">
   {% if flags_count == 0 %}
     <p>{{ no_flags_msg }}</p>
   {% else %}
-    <div class="card">
+    <div class="card surface-card--subtle">
 
       {# --- TOP NOTICE (only for Self Screen) --- #}
       {% if is_self_screen and flags_count > 0 %}
@@ -20,7 +24,7 @@
         {% if doctor_email_notice %}<p>{{ doctor_email_notice }}</p>{% endif %}
       {% endif %}
 
-      <ul>
+      <ul class="summary-list">
         {% for lbl in rf_labels %}
           <li>{{ lbl }}</li>
         {% endfor %}
@@ -28,18 +32,18 @@
 
       {# --- BOTTOM NOTICE (only for Self Screen) --- #}
       {% if is_self_screen %}
-        {% if self_visit_doctor_notice_bottom %}<p style="margin-top:12px"><strong>{{ self_visit_doctor_notice_bottom }}</strong></p>{% endif %}
+        {% if self_visit_doctor_notice_bottom %}<p><strong>{{ self_visit_doctor_notice_bottom }}</strong></p>{% endif %}
       {% endif %}
 
     </div>
 
     <!-- Patient CTAs unchanged -->
-    <div style="margin-top:16px">
+    <div class="inline-actions">
       {% if call_link %}
-        <p><a class="btn btn-red" href="{{ call_link }}">{{ call_to_book_label|default:"CALL TO BOOK DOCTOR APPOINTMENT" }}</a></p>
+        <a class="btn btn-red" href="{{ call_link }}">{{ call_to_book_label|default:"CALL TO BOOK DOCTOR APPOINTMENT" }}</a>
       {% endif %}
       {% if wa_link %}
-        <p><a class="btn" href="{{ wa_link }}" target="_blank" rel="noopener">{{ send_message_to_book_label|default:"SEND MESSAGE TO BOOK DOCTOR APPOINTMENT" }}</a></p>
+        <a class="btn" href="{{ wa_link }}" target="_blank" rel="noopener">{{ send_message_to_book_label|default:"SEND MESSAGE TO BOOK DOCTOR APPOINTMENT" }}</a>
       {% endif %}
     </div>
   {% endif %}
