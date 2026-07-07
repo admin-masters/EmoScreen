@@ -1,6 +1,4 @@
 # EmoScreen README
-
-
 ## 1. Product Overview
 
 ### What the system does
