@@ -3,7 +3,7 @@ name: Deploy EmoScreen Staging to EC2
 on:
   push:
     branches:
-      - Staging
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -18,11 +18,12 @@ jobs:
       - name: Deploy Staging via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.EC2_IP }}
+          host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
+
             cd /var/www/EmoScreen
 
             if ! git diff --quiet -- scripts/deploy.sh; then
@@ -31,11 +32,13 @@ jobs:
             fi
 
             git fetch origin Staging
+
             if git show-ref --verify --quiet refs/heads/Staging; then
               git checkout Staging
             else
               git checkout -b Staging origin/Staging
             fi
+
             git pull --ff-only origin Staging
 
             DEPLOY_ENV=staging \
